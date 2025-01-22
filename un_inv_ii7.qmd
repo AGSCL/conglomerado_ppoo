@@ -1,0 +1,2131 @@
+---
+title: "Paso 6 (3)- Trayectorias de hospitalización y mortalidad con foco en condiciones vinculadas a trastornos de salud mental y consumo de sustancias posterior a un primer ingreso por alguno de estos trastornos, en usuarios/as jóvenes y adultos emergentes de población general y pertenecientes a pueblos originarios, 2018-2021, Chile"
+description: |
+  Análisis de sensibilidad para resolución mensual, utilizando aquella solución que obtuvo índices de calidad aceptables.
+date-format: "D [d]e MMM, YYYY"
+lang: es
+date: last-modified
+bibliography: [_lit/referencias.bib]
+csl: "_lit/american-medical-association.csl" # (Opcional: estilo de citas, p.ej., APA)
+author: "Andrés González Santa Cruz"
+format: 
+  html:
+    css: [_lib/styles.scss]
+    code-fold: true
+    embed-resources: true
+    fig-cap-location: top
+lightbox: auto
+toc: true
+toc-depth: 5
+toc-location: left
+toc-float: true
+---
+
+<style>
+.scrollable-content {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+<style>
+pre.scrollable-code {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+
+
+# Configurar
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+
+#remover imágenes
+while(!dev.cur())dev.off()
+cat("\014")
+
+if(Sys.info()["sysname"]=="Windows"){
+ folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
+                       "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
+                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
+} else {folder_path <- ""}
+load(paste0(folder_path,"avance250117_2.RData"))
+```
+
+
+
+# Paquetes estadísticos
+
+```{r setup}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+
+#elegir repositorio
+if(Sys.info()["sysname"]=="Windows"){
+  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+}
+options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
+
+#borrar caché
+#system("fc-cache -f -v")
+
+if(!require(pacman)){install.packages("pacman");require(pacman)}
+
+pacman::p_unlock(lib.loc = .libPaths()) #para no tener problemas reinstalando paquetes
+
+if(Sys.info()["sysname"]=="Windows"){
+if (getRversion() != "4.4.0") { stop("Requiere versión de R 4.4.0. Actual: ", getRversion()) }
+}
+
+if(!require(job)){install.packages("job");require(job)}
+if(!require(kableExtra)){install.packages("kableExtra");require(kableExtra)}
+if(!require(tidyverse)){install.packages("tidyverse");require(tidyverse)}
+if(!require(cluster)){install.packages("cluster"); require(cluster)}
+if(!require(WeightedCluster)){install.packages("WeightedCluster"); require(WeightedCluster)}
+if(!require(devtools)){install.packages("devtools"); require(devtools)}
+if(!require(TraMineR)){install.packages("TraMineR"); require(TraMineR)}
+if(!require(TraMineRextras)){install.packages("TraMineRextras"); require(TraMineRextras)}
+if(!require(NbClust)){install.packages("NbClust"); require(NbClust)}
+if(!require(haven)){install.packages("haven"); require(haven)}
+if(!require(ggseqplot)){install.packages("ggseqplot"); require(ggseqplot)}
+if(!require(grid)){install.packages("grid"); require(grid)}
+if(!require(gridExtra)){install.packages("gridExtra"); require(gridExtra)}
+if(!require(Tmisc)){install.packages("Tmisc"); require(Tmisc)}
+if(!require(factoextra)){install.packages("factoextra"); require(factoextra)}
+if(!require(stargazer)){install.packages("stargazer"); require(stargazer)}
+if(!require(gtsummary)){install.packages("gtsummary"); require(gtsummary)}
+if(!require(lmtest)){install.packages("lmtest"); require(lmtest)}
+if(!require(emmeans)){install.packages("emmeans"); require(emmeans)}
+if(!require(effsize)){install.packages("effsize"); require(effsize)}
+if(!require(fpp2)){install.packages("fpp2"); require(fpp2)}
+if(!require(purrr)){install.packages("purrr"); require(purrr)}
+if(!require(forecast)){install.packages("forecast"); require(forecast)}
+if(!require(magrittr)){install.packages("magrittr"); require(magrittr)}
+if(!require(foreach)){install.packages("foreach"); require(foreach)}
+if(!require(doParallel)){install.packages("doParallel"); require(doParallel)}
+if(!require(progressr)){install.packages("progressr"); require(progressr)}
+if(!require(chisq.posthoc.test)){devtools::install_github("ebbertd/chisq.posthoc.test")}
+if(!require(rstatix)){install.packages("rstatix"); require(rstatix)}
+if(!require(rio)){install.packages("rio"); require(rio)}
+if(!require(cowplot)){install.packages("cowplot"); require(cowplot)}
+if(!require(DiagrammeR)){install.packages("DiagrammeR"); require(DiagrammeR)}
+if(!require(DiagrammeRsvg)){install.packages("DiagrammeRsvg"); require(DiagrammeRsvg)}
+if(!require(rsvg)){install.packages("rsvg"); require(rsvg)}
+
+
+seq_mean_t_dos_grupos <- function(bd = NULL, group1, group2) {
+  # Agrupar por ambas variables
+  resultados <- by(bd, list(group1, group2), seqmeant)
+  
+  # Obtener todas las combinaciones posibles de los grupos
+  combinaciones <- expand.grid(group1 = unique(group1), group2 = unique(group2), stringsAsFactors = FALSE)
+  
+  # Extraer los resultados y asociarlos con las combinaciones
+  resultados_df <- do.call(rbind, lapply(seq_along(resultados), function(i) {
+    group_name1 <- attr(resultados, "dimnames")[[1]][i]
+    group_name2 <- attr(resultados, "dimnames")[[2]][i]
+    
+    data.frame(factor_inclusivo_1 = group_name1, 
+               factor_inclusivo_2 = group_name2, 
+               Mean = resultados[[i]])
+  }))
+  
+  # Unir los resultados con las combinaciones para rellenar los valores faltantes
+  final_df <- merge(combinaciones, resultados_df, by.x = c("group1", "group2"), 
+                    by.y = c("factor_inclusivo_1", "factor_inclusivo_2"), all.x = TRUE)
+  
+  return(final_df)
+}
+
+multinom_pivot_wider <- function(x) {
+  # check inputs match expectatations
+  # create tibble of results
+  df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col))
+  df$tbl <- 
+    purrr::map(
+      df$outcome_level,
+      function(lvl) {
+        gtsummary::modify_table_body(
+          x, 
+          ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>%
+            dplyr::ungroup() %>%
+            dplyr::select(-.data$groupname_col)
+        )
+      }
+    )
+  
+  tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**"))
+}
+
+best_subset_multinom <- function(y, x.vars, data) {
+  # y       Nombre de la variable dependiente (cadena de texto)
+  # x.vars  Vector de nombres de predictores (caracter)
+  # data    Dataframe con los datos de entrenamiento
+  
+  # Cargar las librerías necesarias
+  require(dplyr)
+  require(purrr)
+  require(tidyr)
+  require(nnet)
+  require(MASS)
+  
+  # Generar todas las combinaciones posibles de predictores
+  predictors_list <- lapply(1:length(x.vars), function(i) {
+    combn(x.vars, i, simplify = FALSE)
+  }) %>% unlist(recursive = FALSE)
+  
+  # Inicializar una lista para almacenar los resultados
+  results <- list()
+  
+  # Iterar sobre cada combinación de predictores
+  for (i in seq_along(predictors_list)) {
+    predictors <- predictors_list[[i]]
+    formula <- as.formula(paste(y, "~", paste(predictors, collapse = "+")))
+    
+    # Ajustar el modelo multinomial
+    model <- tryCatch(
+      nnet::multinom(formula, data = data, trace = FALSE),
+      error = function(e) NULL
+    )
+    
+    # Si el modelo se ajustó correctamente, almacenar los resultados
+    if (!is.null(model)) {
+      # Extraer el AIC del modelo
+      aic <- AIC(model)
+      
+      # Almacenar la información en una lista
+      results[[length(results) + 1]] <- list(
+        predictors = predictors,
+        model = model,
+        AIC = aic
+      )
+    }
+  }
+  
+  # Convertir la lista de resultados en un dataframe
+  results_df <- results %>%
+    purrr::map_df(function(res) {
+      data.frame(
+        predictors = paste(res$predictors, collapse = "+"),
+        AIC = res$AIC,
+        stringsAsFactors = FALSE
+      )
+    })
+  
+  # Ordenar los modelos por AIC de menor a mayor
+  results_df <- results_df %>% arrange(AIC)
+  
+  return(results_df)
+}
+best_subset_multinom_interactions <- function(y, x.vars, data) {
+  # y       Nombre de la variable dependiente (cadena de texto)
+  # x.vars  Vector de nombres de predictores (caracter)
+  # data    Dataframe con los datos de entrenamiento
+  
+  # Cargar las librerías necesarias
+  require(dplyr)
+  require(purrr)
+  require(tidyr)
+  require(nnet)
+  require(MASS)
+  
+  # Generar todas las combinaciones posibles de predictores (efectos principales)
+  main_effects_list <- lapply(1:length(x.vars), function(i) {
+    combn(x.vars, i, simplify = FALSE)
+  }) %>% unlist(recursive = FALSE)
+  
+  # Inicializar una lista para almacenar los resultados
+  results <- list()
+  
+  # Iterar sobre cada combinación de efectos principales
+  for (main_effects in main_effects_list) {
+    
+    # Generar términos de interacción de hasta 3 variables
+    interaction_terms <- list()
+    
+    # Para interacciones de 2 variables
+    if (length(main_effects) >= 2) {
+      interaction_terms_2way <- combn(main_effects, 2, function(x) paste(x, collapse = ":"))
+      interaction_terms <- c(interaction_terms, interaction_terms_2way)
+    }
+    
+    # Para interacciones de 3 variables
+    if (length(main_effects) >= 3) {
+      interaction_terms_3way <- combn(main_effects, 3, function(x) paste(x, collapse = ":"))
+      interaction_terms <- c(interaction_terms, interaction_terms_3way)
+    }
+    
+    # Combinar efectos principales e interacciones
+    all_terms <- c(main_effects, interaction_terms)
+    
+    # Generar todas las combinaciones posibles de términos (incluyendo interacciones)
+    # Solo se incluyen interacciones si sus efectos principales están presentes
+    term_combinations <- list()
+    
+    # Obtener todos los subconjuntos de efectos principales
+    main_effects_subsets <- lapply(1:length(main_effects), function(i) {
+      combn(main_effects, i, simplify = FALSE)
+    }) %>% unlist(recursive = FALSE)
+    
+    # Para cada subconjunto de efectos principales
+    for (me in main_effects_subsets) {
+      # Iniciar con los efectos principales
+      terms <- me
+      
+      # Incluir interacciones solo si todos sus efectos principales están incluidos
+      possible_interactions <- interaction_terms[
+        sapply(interaction_terms, function(x) {
+          vars_in_interaction <- unlist(strsplit(x, ":"))
+          all(vars_in_interaction %in% me)
+        })
+      ]
+      
+      # Generar todas las combinaciones de interacciones para incluir
+      interaction_subsets <- list(NULL)
+      if (length(possible_interactions) > 0) {
+        interaction_subsets <- lapply(1:length(possible_interactions), function(i) {
+          combn(possible_interactions, i, simplify = FALSE)
+        }) %>% unlist(recursive = FALSE)
+      }
+      
+      # Para cada combinación de interacciones, crear el conjunto completo de términos
+      for (ints in interaction_subsets) {
+        if (is.null(ints)) {
+          full_terms <- terms
+        } else {
+          full_terms <- c(terms, ints)
+        }
+        
+        # Añadir a la lista de combinaciones de términos
+        term_combinations <- append(term_combinations, list(full_terms))
+      }
+    }
+    
+    # Ajustar modelos para cada combinación de términos
+    for (terms in term_combinations) {
+      formula <- as.formula(paste(y, "~", paste(terms, collapse = "+")))
+      
+      # Ajustar el modelo multinomial
+      model <- tryCatch(
+        nnet::multinom(formula, data = data, trace = FALSE),
+        error = function(e) NULL,
+        warning = function(w) NULL
+      )
+      
+      # Si el modelo se ajustó correctamente, almacenar los resultados
+      if (!is.null(model)) {
+        # Extraer el BIC del modelo
+        bic <- BIC(model)
+        
+        # Almacenar la información en la lista de resultados
+        results[[length(results) + 1]] <- list(
+          predictors = paste(terms, collapse = " + "),
+          model = model,
+          BIC = bic
+        )
+      }
+    }
+  }
+  
+  # Convertir la lista de resultados en un dataframe
+  results_df <- results %>%
+    purrr::map_df(function(res) {
+      data.frame(
+        predictors = res$predictors,
+        BIC = res$BIC,
+        stringsAsFactors = FALSE
+      )
+    })
+  
+  # Ordenar los modelos por BIC de menor a mayor
+  results_df <- results_df %>% arrange(BIC)
+  
+  return(results_df)
+}
+
+best_subset_multinom_interactions_parallel <- function(y, x.vars, data) {
+  # y       Nombre de la variable dependiente (cadena de texto)
+  # x.vars  Vector de nombres de predictores (caracter)
+  # data    Dataframe con los datos de entrenamiento
+  
+  # Cargar las librerías necesarias dentro de la función
+  require(dplyr)
+  require(purrr)
+  require(tidyr)
+  require(nnet)
+  require(MASS)
+  require(foreach)
+  require(doParallel)
+  require(progressr)
+  
+  # Iniciar los gestores de progreso
+  handlers(global = TRUE)
+  handlers("txt")
+  
+  # Generar todas las combinaciones posibles de predictores (efectos principales)
+  main_effects_list <- lapply(1:length(x.vars), function(i) {
+    combn(x.vars, i, simplify = FALSE)
+  }) %>% unlist(recursive = FALSE)
+  
+  # Inicializar una lista para almacenar las fórmulas de los modelos
+  formulas_list <- list()
+  
+  # Generar todas las fórmulas posibles con interacciones hasta de 3 variables
+  for (main_effects in main_effects_list) {
+    
+    # Generar términos de interacción de hasta 3 variables
+    interaction_terms <- character(0)  # Aseguramos que es un vector de caracteres
+    
+    # Para interacciones de 2 variables
+    if (length(main_effects) >= 2) {
+      interaction_terms_2way <- combn(main_effects, 2, function(x) paste(x, collapse = ":"), simplify = TRUE)
+      interaction_terms <- c(interaction_terms, interaction_terms_2way)
+    }
+    
+    # Para interacciones de 3 variables
+    if (length(main_effects) >= 3) {
+      interaction_terms_3way <- combn(main_effects, 3, function(x) paste(x, collapse = ":"), simplify = TRUE)
+      interaction_terms <- c(interaction_terms, interaction_terms_3way)
+    }
+    
+    # Generar todas las combinaciones posibles de efectos principales
+    main_effects_subsets <- lapply(1:length(main_effects), function(i) {
+      combn(main_effects, i, simplify = FALSE)
+    }) %>% unlist(recursive = FALSE)
+    
+    # Para cada subconjunto de efectos principales
+    for (me in main_effects_subsets) {
+      # Iniciar con los efectos principales
+      terms <- me
+      
+      # Identificar interacciones cuyos efectos principales están en 'me'
+      if (length(interaction_terms) > 0) {
+        possible_interactions <- interaction_terms[
+          vapply(interaction_terms, function(x) {
+            vars_in_interaction <- unlist(strsplit(x, ":"))
+            all(vars_in_interaction %in% me)
+          }, FUN.VALUE = logical(1))
+        ]
+      } else {
+        possible_interactions <- character(0)
+      }
+      
+      # Generar todas las combinaciones posibles de estas interacciones
+      interaction_subsets <- list(character(0))  # Incluir el caso sin interacciones
+      if (length(possible_interactions) > 0) {
+        interaction_combinations <- lapply(1:length(possible_interactions), function(i) {
+          combn(possible_interactions, i, simplify = FALSE)
+        }) %>% unlist(recursive = FALSE)
+        interaction_subsets <- c(interaction_subsets, interaction_combinations)
+      }
+      
+      # Para cada combinación de interacciones
+      for (ints in interaction_subsets) {
+        full_terms <- c(terms, ints)
+        
+        # Crear la fórmula del modelo y almacenarla
+        formula_str <- paste(y, "~", paste(full_terms, collapse = "+"))
+        formulas_list <- append(formulas_list, list(formula_str))
+      }
+    }
+  }
+  
+  # Eliminar posibles duplicados de fórmulas
+  formulas_list <- unique(formulas_list)
+  
+  # Total de modelos a ajustar
+  total_models <- length(formulas_list)
+  
+  # Iniciar el progreso
+  p <- progressor(steps = total_models)
+  
+  # Ajustar los modelos en paralelo usando foreach
+  results_list <- foreach(i = 1:total_models, .packages = c("nnet", "MASS"), .combine = 'rbind') %dopar% {
+    formula_str <- formulas_list[[i]]
+    formula <- as.formula(formula_str)
+    
+    # Ajustar el modelo
+    model <- tryCatch(
+      nnet::multinom(formula, data = data, trace = FALSE),
+      error = function(e) NULL,
+      warning = function(w) NULL
+    )
+    
+    # Actualizar el progreso
+    p(sprintf("Ajustando modelo %d de %d", i, total_models))
+    
+    # Si el modelo se ajustó correctamente, almacenar los resultados
+    if (!is.null(model)) {
+      bic <- BIC(model)
+      data.frame(
+        predictors = formula_str,
+        BIC = bic,
+        stringsAsFactors = FALSE
+      )
+    } else {
+      NULL
+    }
+  }
+  
+  # Convertir los resultados a dataframe y ordenar por BIC
+  results_df <- as.data.frame(results_list)
+  results_df <- results_df %>% arrange(BIC)
+  
+  return(results_df)
+}
+
+
+num_cores <- parallel::detectCores() - 1
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+#pacman job kableExtra tidyverse cluster WeightedCluster devtools TraMineR TraMineRextras NbClust haven ggseqplot gridExtra Tmisc factoextra reticulate withr rmarkdown quarto
+
+options(knitr.kable.NA = '')
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#
+
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- ifelse(difftime(Sys.time(), now)>(60^2),difftime(Sys.time(), now)/(60^2),difftime(Sys.time(), now)/(60^1))
+      # return a character string to show the time
+      x<-ifelse(difftime(Sys.time(), now)>(60^2),paste("Tiempo que demora esta sección:", round(res,1), "horas"),paste("Tiempo que demora esta sección:", round(res,1), "minutos"))
+      paste('<div class="message">', gsub('##', '\n', x),'</div>', sep = '\n')
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+format_cells <- function(df, rows ,cols, value = c("italics", "bold", "strikethrough")){
+  
+  # select the correct markup
+  # one * for italics, two ** for bold
+  map <- setNames(c("*", "**", "~~"), c("italics", "bold", "strikethrough"))
+  markup <- map[value]  
+  
+  for (r in rows){
+    for(c in cols){
+      
+      # Make sure values are not factors
+      df[[c]] <- as.character( df[[c]])
+      
+      # Update formatting
+      df[r, c] <- ifelse(nchar(df[r, c])==0,"",paste0(markup, gsub(" ", "", df[r, c]), markup))
+    }
+  }
+  
+  return(df)
+}
+#To produce line breaks in messages and warnings
+knitr::knit_hooks$set(
+  error = function(x, options) {
+    paste('\n\n<div class="alert alert-danger">',
+          gsub('##', '\n', gsub('^##\ Error', '**Error**', x)),
+          '</div>', sep = '\n')
+  },
+  warning = function(x, options) {
+    paste('\n\n<div class="alert alert-warning">',
+          gsub('##', '\n', gsub('^##\ Warning:', '**Warning**', x)),
+          '</div>', sep = '\n')
+  },
+  message = function(x, options) {
+    paste('<div class="message">',
+          gsub('##', '\n', x),
+          '</div>', sep = '\n')
+  }
+)
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_
+invisible("Function to format CreateTableOne into a database")
+
+as.data.frame.TableOne <- function(x, ...) {capture.output(print(x,showAllLevels = TRUE, varLabels = T,...) -> x)
+  y <- as.data.frame(x)
+  y$characteristic <- dplyr::na_if(rownames(x), "")
+  y <- y %>%
+    fill(characteristic, .direction = "down") %>%
+    dplyr::select(characteristic, everything())
+  rownames(y) <- NULL
+  y}
+#_#_#_#_#_#_#_#_#_#_#_#_#_
+# Austin, P. C. (2009). The Relative Ability of Different Propensity 
+# Score Methods to Balance Measured Covariates Between 
+# Treated and Untreated Subjects in Observational Studies. Medical 
+# Decision Making. https://doi.org/10.1177/0272989X09341755
+smd_bin <- function(x,y){
+  z <- x*(1-x)
+  t <- y*(1-y)
+  k <- sum(z,t)
+  l <- k/2
+  
+  return((x-y)/sqrt(l))
+  
+}
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+
+if(.Platform$OS.type == "windows") withAutoprint({
+  memory.size()
+  memory.size(TRUE)
+  memory.limit()
+})
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+func_tab_range_clus<-
+function(range_clus){
+rbind.data.frame(
+  lapply(
+    list(
+      as.vector(rev(sort(table(range_clus$clustering$cluster2)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster3)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster4)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster5)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster6)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster7)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster8)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster9)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster10)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster11)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster12)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster13)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster14)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster15))))
+    ),
+    function(x) {
+      length_out <- max(sapply(list(
+        as.vector(rev(sort(table(range_clus$clustering$cluster2)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster3)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster4)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster5)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster6)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster7)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster8)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster9)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster10)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster11)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster12)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster13)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster14)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster15))))
+      ), length))
+      c(x, rep(NA, length_out - length(x)))
+    }
+  )
+)%>%
+  t() |> 
+  data.frame()%>%
+  `rownames<-`(NULL)
+}
+
+
+frobenius_norm <- function(matrix1, matrix2) {
+    if (!all(dim(matrix1) == dim(matrix2))) {
+        stop("Matrices must have the same dimensions")
+    }
+    
+    # Replace NA values with 0 (or any other desired default)
+    matrix1[is.na(matrix1)] <- 0
+    matrix2[is.na(matrix2)] <- 0
+    
+    # Calculate the residuals
+    residuals <- matrix1 - matrix2
+    
+    # Frobenius norm
+    frobenius <- sqrt(sum(residuals^2))
+    return(frobenius)
+}
+
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+confcqi2 <- function(nullstat, quant, n){
+  alpha <- (1-quant)/2
+  #calpha <- alpha+(alpha-1)/n
+  #print(c(calpha, alpha))
+  #minmax <- quantile(nullstat, c(calpha, 1-calpha))
+  minmax <- quantile(nullstat, c(alpha, 1-alpha))
+  return(minmax)
+}
+
+normstatcqi2 <- function(bcq, stat, norm=TRUE){
+  origstat <- bcq$clustrange$stats[, stat]
+  nullstat <- bcq$stats[[stat]]
+  #normstat <- rbind(nullstat, origstat)
+  if(norm){
+    for(i in seq_along(origstat)){
+      mx <- mean(nullstat[, i])
+      sdx <- sd(nullstat[, i])
+      nullstat[ , i] <- (nullstat[, i]-mx)/sdx
+      origstat[i] <- (origstat[i]-mx)/sdx
+    }
+  }
+  alldatamax <- apply(nullstat, 1, max)#as.vector(xx)
+  sumcqi <- list(origstat=origstat, nullstat=nullstat, alldatamax=alldatamax)
+  return(sumcqi)
+}
+print.seqnullcqi.powder <- function(x, norm = FALSE, quant = 0.95, digits = 2, 
+                                    append = FALSE, ...) {
+    cat("Parametric bootstrap cluster analysis validation\n")
+    cat("Sequence analysis null model:", deparse(x$nullmodel), "\n")
+    cat("Number of bootstraps:", x$R, "\n")
+    cat("Clustering method:", ifelse(x$kmedoid, "PAM/K-Medoid", paste0("hclust with ", x$hclust.method)), "\n")
+    cat("Seqdist arguments:", deparse(x$seqdist.args), "\n\n\n")
+    alls <- as.data.frame(x$clustrange$stats)
+    quants <- rep("", ncol(alls))
+    names(quants) <- colnames(alls)
+    for (ss in colnames(alls)) {
+        sumcqi <- normstatcqi2(x, stat = ss, norm = norm)
+        alls[, ss] <- as.character(round(sumcqi$origstat, digits = digits))
+        borne <- as.character(round(confcqi2(sumcqi$alldatamax, quant, x$R), digits = digits))
+        quants[ss] <- paste0("[", borne[1], "; ", borne[2], "]")
+    }
+    results_tibble <- tibble::as_tibble(rbind(alls, rep("", length(quants)), quants))
+    # Print a summary to the console for immediate feedback
+    rownames(results_tibble) <- c(rownames(x$clustrange$stats), "", paste("Null Max-T", quant, "interval"))
+    
+    results_df <- as.data.frame(results_tibble)
+    print(results_tibble, ...)
+    return(list(
+      results_tibble= results_tibble, 
+      results_df= results_df
+      ))
+}
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+##:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+# Función para aplicar la prueba de Fisher a todas las combinaciones de filas usando todas las columnas
+fisher_posthoc_all_cols <- function(contingency_table) {
+  # Obtener combinaciones de filas (pares)
+  row_pairs <- combn(rownames(contingency_table), 2, simplify = FALSE)
+  
+  # Aplicar la prueba de Fisher a cada par de filas usando todas las columnas al mismo tiempo
+  results <- map_dfr(row_pairs, function(pair) {
+    # Crear tabla de 2xN para el par de filas en todas las columnas
+    sub_table <- contingency_table[pair, , drop = FALSE]
+    
+    # Aplicar el test de Fisher
+    test_result <- fisher.test(sub_table, 
+                                 simulate.p.value=T,
+                                 B=1e4)
+    
+    # Devolver los resultados en un data frame
+    tibble(
+      Row1 = pair[1],
+      Row2 = pair[2],
+      p.value = test_result$p.value
+    )
+  })
+  
+  # Ajustar p-valores usando el método de Holm
+  results <- results %>%
+    mutate(p.adjusted = p.adjust(p.value, method = "holm"))
+  
+  return(results)
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+save_base_plot_as_grob <- function(plot_expr, res=300,  width = 1600, height= 1200) {
+    # Crea un archivo temporal con extensión .png
+    filename <- tempfile(fileext = ".png")
+    
+    # Guarda el gráfico en alta resolución en el archivo temporal
+    png(filename, width = width, height = height, res = res)
+    replayPlot(plot_expr)  # Reproduce el gráfico grabado
+    dev.off()  # Cierra el dispositivo gráfico
+    
+    # Convierte el archivo PNG en un objeto gráfico (grob)
+    grob <- grid::rasterGrob(png::readPNG(filename), interpolate = TRUE)
+    
+    return(grob)  # Devuelve el grob
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+chisq_cramerv<- function(contingency_table){
+  chisq_test <- chisq.test(contingency_table)
+  cramers_v <- sqrt(chisq_test$statistic / (sum(contingency_table) * (min(dim(contingency_table)) - 1)))
+  
+  list(chisq_statistic= sprintf("%1.2f", chisq_test$statistic), chisq_df= chisq_test$parameter, chisq_p_value = ifelse(chisq_test$p.value<.001, "<0.001", sprintf("%1.4f", chisq_test$p.value)), cramers_v = sprintf("%1.2f", cramers_v))
+}
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#
+oneway_anova_effect_size <- function(values, group) {
+  # Perform one-way ANOVA
+  anova_result <- aov(values ~ group)
+  
+  # Summarize ANOVA results
+  anova_summary <- summary(anova_result)
+  
+  # Extract sums of squares
+  ss_between <- anova_summary[[1]]$"Sum Sq"[1]
+  ss_total <- sum(anova_summary[[1]]$"Sum Sq")
+  
+  # Calculate eta-squared
+  eta_squared <- ss_between / ss_total
+  
+  # Return ANOVA summary and effect size
+  list(
+    anova_summary = anova_summary,
+    eta_squared = eta_squared
+  )
+}
+```
+
+
+# Resultados
+
+## 2. Mensual
+
+### 2.1. Sensibilidad= PAM (OM), sol 2 cluster- diagnósticos
+
+```{r 21a}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: silueta-pamom2-m
+
+# pam	om	month	2
+# pam	om	month	2
+
+invisible("Información sobre la solución")
+invisible("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/_hist_sintaxis/un_inv_ii5_explorar_soluciones.R")
+# 
+invisible("Hacemos clasificación de pertenencia cluster y ponemos etiquetas")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2 <-
+  factor(pamRange_month_lcs$clustering$cluster2,levels=rev(attr( sort(table(pamRange_month_lcs$clustering$cluster2)), "name")),
+         labels= c("6035, Un trimestre, TSM(2)", 
+                   "6025, Un trimestre, TUS(1)"
+         ))
+
+invisible("Me da buena: 0,61 en promedio. Se mantiene. El problema está con 5710 es negativo")
+sil_pam_om_clus2_m_nostd<-
+  silhouette(as.integer(pamRange_month_om$clustering$cluster2), as.dist(dist_quarter_om))
+
+# Crear etiquetas personalizadas
+cluster_labels2_m <- paste0("Cluster ", 
+          seq_along(attr(summary(sil_pam_om_clus2_m_nostd)$clus.avg.widths, "dimnames")[[1]]), 
+          ":\nAWS ", sprintf("%1.2f",summary(sil_pam_om_clus2_m_nostd)$clus.avg.widths))
+
+# Graficar con etiquetas personalizadas
+fviz_silhouette(
+  sil_pam_om_clus2_m_nostd, 
+  lab.clusters = cluster_labels2_m, # Etiquetas personalizadas para los clústeres
+  print.summary=F) +
+  scale_fill_grey(start = 0.2, end = 0.8, labels = cluster_labels2_m) +  # Escala de grises
+  scale_color_grey(start = 0.2, end = 0.8, labels = cluster_labels2_m)+   # Escala de grises para los bordea
+  ggtitle(NULL)+
+  labs(y="Ancho medio de la silueta", x="Conglomerados")# Elimina el título
+
+ggsave("_figs/sil_plot_pam_om2_m.png", width = 8, height = 5, dpi = 500)
+```
+
+De la figura se desprende que el conglomerado 6035, Un año despues, TSM tiene un ajuste promedio negativo. En menor medida, el conglomerado 6036, TSM, 1 año después, otras causas, tiene algunos valores de ancho de silueta negativos. Posteriormente vemos una tabla de contingencia para entender el origen de los nuevos conglomerados.
+
+
+```{r 21a2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: pamom2vspamom4
+
+# Crear la tabla de frecuencias proporcionales redondeada
+tabla_proporciones2 <- round(prop.table(table(pamRange_month_om$clustering$cluster2, 
+                                             pamRange_quarter_om$clustering$cluster4), 2), 2)
+
+# Convertir la tabla a un formato limpio con kable
+knitr::kable(tabla_proporciones2, 
+             caption = "Proporciones de Clusters, Solución de 2 vs. 4 conglomerados", 
+             col.names = c("5939, Un semestre TSM(1)", "5989, Comorbilidad un trimestre(2)", 
+                           "6025, Un trimestre, TUS(3)", "6035, Un trimestre, TSM(4)"), 
+             align = "c")
+```
+
+
+
+Luego vemos la clasificación de PPOO por cluster
+
+```{r 21c}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+janitor::chisq.test(df_filled[,c("run","glosa_pueblo_originario")] %>% 
+        dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first") %>% 
+        janitor::tabyl(glosa_pueblo_originario, clus_pam_om2))
+# X-squared = 136.81, df = 24, p-value < 2.2e-16
+```
+
+Generamos un gráfico de PPOO por cada conglomerado.
+
+```{r 21ppoo-plot-cluster}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "PPOO por cluster"
+#| results: "hold"
+#| fig-width: 10
+#| fig-height: 5
+
+ppoo_clus_pre_pam_om2_m<-
+  df_filled[,c("run","glosa_pueblo_originario")] %>% 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2","factor_inclusivo_real_hist_mas_autperc")], by="run", multiple="first") %>% 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario=="NINGUNO" & factor_inclusivo_real_hist_mas_autperc!="00"~ "DESCONOCIDO", T~glosa_pueblo_originario)) %>% 
+  janitor::tabyl(glosa_pueblo_originario_rec, clus_pam_om2) %>% 
+  janitor::adorn_percentages("row")
+#scale_fill_manual(values = rev(c("#D2B48C", "#E27A5B", "#708090", "#6B8E23", "#506070"  , "#2F4F4F", "#20B2AA"))) +
+reshape2::melt(ppoo_clus_pre_pam_om2_m, id.vars = "glosa_pueblo_originario_rec") %>% 
+  dplyr::mutate(glosa_pueblo_originario_rec= 
+    dplyr::recode(glosa_pueblo_originario_rec, 
+      "OTRO (ESPECIFICAR)"="OTRO(n=77)", 
+      "RAPA NUI (PASCUENSE)"="RAPA NUI(n=34)", 
+      "YAGÁN (YÁMANA)"="YAGÁN(n=2)",
+      "AYMARA"="AYMARA(n=13)",
+      "COLLA"="COLLA(n=6)",
+      "DIAGUITA"="DIAGUITA(n=3)",
+      "KAWÉSQAR"="KAWÉSQAR(n=4)",
+      "MAPUCHE"="MAPUCHE(n=255)",
+      "DESCONOCIDO"=".DESCONOCIDO(n=1.985)",
+      "NINGUNO"=".NINGUNO(n=9.156)")) %>% 
+ggplot(aes(x = glosa_pueblo_originario_rec, y = value, fill = variable)) + 
+  geom_bar(stat = "identity", position = "fill") + 
+  scale_fill_manual(values =  c(
+  "6035, Un trimestre, TSM(6)" = "#D2B48C",
+  "6025, Un trimestre, TUS(5)" = "#E27A5B",
+  "Un semestre TSM(3)" = "#708090",
+  "5989, Comorbilidad un trimestre(4)" = "#6B8E23",
+  "6036, TSM, 1 año después, otras causas(7)" = "#506070",
+  "5710, TSM, 1 año después, TSM(1)" = "#2F4F4F",
+  "5935, TSM, 6 meses después, TSM(2)" = "#20B2AA"
+)) +
+  labs(title = NULL,
+       x = "Grupo Étnico",
+       y = "Proporción de Casos",
+       fill = "Grupos") +  # Cambia el título de la leyenda a "Grupos"
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 12),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 12),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 14),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 14),          # Tamaño del título del eje Y
+    plot.title = NULL,  # Tamaño y estilo del título del gráfico
+    legend.title = element_text(size = 14, margin = margin(b = -.1)),          # Tamaño del título de la leyenda
+    legend.spacing.y = unit(1.5, "lines"),
+    legend.box.spacing = unit(0.5, "lines"),      # Controla el espacio entre la leyenda y el gráfico
+    legend.margin = margin(5, 5, 5, 5),  
+    legend.key.height = unit(1, "cm"),  
+    legend.text = element_text(size = 12)            # Tamaño del texto de la leyenda
+    ) + 
+  coord_flip()  # Hacer el gráfico horizontal
+ggsave("_figs/grafico_ancho_achatado_pam_om2_m.png", width = 10, height = 5, dpi=1000)
+
+```
+
+Vemos que en los ingresados Rapa Nui, hay una importante proporción de participantes (50%) son clasificados en el conglomerado "5710, TSM, 1 año después, TSM". 
+
+
+#### 2.1.1. Trayectorias
+
+Vemos los gráficos de las trayectorias
+
+```{r 21plot-cluster}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 11
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: 12plot-cluster-grafico-trayectorias
+
+
+categories_pam_om2_m<-attr(States_Wide.seq_month_t_prim_adm_cens, "labels")
+new_labels <- categories_pam_om2_m
+new_labels[which(categories_pam_om2_m == "Otras causas")] <- "Otras\ncausas"
+#new_labels[which(categories == "Consumo\nde sustancias")] <- "Consumo de\nsustancias"
+
+# Creamos un vector con las columnas llenando con NA si faltan valores
+sil_pam_om_clus2_m <- wcSilhouetteObs(as.dist(dist_month_om), 
+        pamRange_month_om$clustering$cluster2, measure="ASW")
+
+
+seq_plot_pam_om2_m <- ggseqiplot(States_Wide.seq_month_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,
+                                 facet_ncol=1, facet_nrow=2, sortv=sil_pam_om_clus2_m) +
+  theme(legend.position = "none")+
+  labs(x="Trimestres", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 10, margin = margin(b =-15, t=10)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.2, "lines"),
+    plot.margin = margin(10, 10, 10, 10), # Ajusta márgenes globales
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_pam_om2_m 
+
+ggsave(filename="_figs/clusters_pam_om2_m_mod.png", seq_plot_pam_om2_m,  width = 11, height = 5.5, dpi=1000)
+```
+
+```{r }
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, frecuencia relativa de estados en un gráfico de barras apiladas por trimestre."
+#| results: "hold"
+#| fig-width: 9
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: 21plot-cluster2-grafico-trayectorias2
+
+seq_plot2_pam_om2_m <- ggseqdplot(States_Wide.seq_month_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,
+                                 facet_ncol=1, facet_nrow=2) +
+  theme(legend.position = "none")+  # Colocar la leyenda abajo
+  labs(x="Trimestres", y="Frecuencia relativa de estados")+
+  theme(
+    panel.spacing = unit(0.1, "lines"),
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -5)),
+    strip.text = element_text(size = 11),
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda    
+  )  # Colocar la leyenda abajo
+seq_plot2_pam_om2_m
+ggsave("_figs/clusterspam_om22_m_mod.png",seq_plot2_pam_om2_m, width = 8.5, height = 5.5, dpi=1000)
+
+
+table_data_pam_om2_m <- sprintf("%1.2f",pamRange_month_om$stats[1,])
+table_data_pam_om2_m <-as.data.frame(t(table_data_pam_om2_m))
+colnames(table_data_pam_om2_m)<-attr(pamRange_month_om$stats, "name")
+table_data_pam_om2_m %>% knitr::kable()
+```
+
+De este modo, presenta el cambio agregado en la distribución de estados a lo largo del tiempo, sin considerar las secuencias individuales.
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+#| label: exploracion-siluetas
+
+invisible("Definimos las observaciones que tienen siluetas negativas")
+sil_neg_pam_om_clus2_m <- which(sil_pam_om_clus2_m<0)
+
+invisible("A qué conglomerados pertenecen?")
+table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[sil_neg_pam_om_clus2_m, "clus_pam_om2"])
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$rn<- 1:nrow(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)
+```
+
+
+#### 2.1.2.Exploración transiciones
+
+##### 2.1.2.a Transiciones- RM y no RM
+
+Tasas de transición no RM a RM y viceversa
+
+```{r 21pre-plot-cluster3}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| results: "hide"
+
+invisible("Tasas de transición no RM a RM y viceversa")
+
+trim_tasa_pam_om2_m_cens_cnt<-  
+  seqcount_t(States_Wide.seq_month_t_prim_adm_RM_cens, 
+             group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) %>% 
+  dplyr::filter(count>0) %>% 
+  dplyr::mutate(trans = paste0(from,"_", to)) %>% 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+trim_tasa_pam_om2_m_cens_rate<-  
+  seqtrate_t(States_Wide.seq_month_t_prim_adm_RM_cens, 
+             group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) %>% 
+  dplyr::filter(rate>0) %>% 
+  dplyr::mutate(trans = paste0(from,"_", to)) %>% 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))
+```
+
+```{r 21plot-cluster3}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Porcentajes de transición  no-RM y RM por cada cluster"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 8
+#| fig-dpi: 600
+
+trim_tasa_pam_om2_m_cens_rate %>%   
+  dplyr::left_join(trim_tasa_pam_om2_m_cens_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) %>% 
+  dplyr::rename("recuento"="count") %>% 
+  dplyr::filter(from %in% c("RM", "noRM")) %>%  
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+
+invisible("Hay muy pocos casos que se entrecruzan entre noRM y RM (fuera de la diagnonal)")
+```
+
+Hay muy pocos casos que se entrecruzan entre noRM y RM (fuera de la diagnonal)
+
+##### 2.1.2.b Transiciones
+
+```{r 21pre-plot-cluster4}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| results: "hide"
+
+trim_tasa2_pam_om2_m_cens_cnt<-  
+   seqcount_t(States_Wide.seq_month_t_prim_adm_cens, 
+             group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) %>% 
+  dplyr::filter(count>0) %>% 
+  dplyr::mutate(trans = paste0(from,"_", to)) %>% 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+trim_tasa2_pam_om2_m_cens_rate<-  
+  seqtrate_t(States_Wide.seq_month_t_prim_adm_cens, 
+             group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) %>% 
+  dplyr::filter(rate>0) %>% 
+  dplyr::mutate(trans = paste0(from,"_", to)) %>% 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))
+```
+
+```{r 21plot-cluster4}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Porcentajes de transición, transiciones posteriores, por cada cluster"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 8
+#| fig-dpi: 600
+
+trim_tasa2_pam_om2_m_cens_rate %>%   
+  dplyr::left_join(trim_tasa2_pam_om2_m_cens_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) %>% 
+  dplyr::rename("recuento"="count") %>% 
+  #dplyr::filter(from %in% c("RM", "noRM")) %>%  
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+##### 2.1.2.c Tiempo promedio por cluster
+
+```{r 21plot-cluster5}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Tiempo promedio en cada estado por estatus PPOO (Trimestral c/censura)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 8
+#| fig-dpi: 600
+
+seq_mean_t(States_Wide.seq_month_t_prim_adm_cens, 
+             group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) %>% 
+  data.table::as.data.table(keep.rowname=T) %>%
+  dplyr::mutate(rn= gsub("\\d", "", rn)) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  facet_wrap(~factor_inclusivo)+
+  labs(title = NULL,
+       x = NULL,
+       y = NULL) +
+  scale_fill_manual(values = rev(c("#D2B48C", "#E27A5B"))) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+#  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 3.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank(), legend.position=c(.8,.85))
+
+invisible("No me aporta mucho")
+```
+
+Observamos que aquellos en el conglomerado que se encuentra ingresada por trastornos de salud mental y luego vuelve, la duración de los ingresos relacionados con trastornos de salud mental son en promedio casi dos veces más largos. 
+
+
+#### 2.1.3. Comparación variables
+
+##### 2.1.3.a. Comparación covariables- PPOO
+
+```{r 21f-comp-cov-ppoo1}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>%
+  dplyr::count(clus_pam_om2, factor_inclusivo_real_hist_mas_autperc) %>%
+  dplyr::group_by(clus_pam_om2) %>%
+  dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n)),")")) %>%
+  dplyr::select(-n) %>%
+  tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc, values_from = n_prop, values_fill = "0")%>% 
+  knitr::kable("markdown", col.names=c("Conglomerados","No se identifica/no pertenece", "No se identifica/hay reconocimiento", "Se identifica/hay reconocimeinto"), caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO")
+```
+
+Vemos las categorías de clasificación de PPOO según autopercepción (en MINSAL y en RSH) y reconocimiento CONADI.
+
+```{r 21g-comp-cov-ppoo2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+#| 
+chisq.test(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2))
+#X-squared = 3.5602, df = 2, p-value = 0.1686
+
+message("Descartando valores negativos en sil width")
+chisq.test(
+with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om2))
+)
+```
+
+No se constata una asocaición entre autoidentificación/reconocimiento perteneciente a PPOO y la pertenencia a conglomerados.
+
+
+Ahora lo hacemos con la versión binarizada
+
+```{r 21i-comp-cov-ppoo4}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc_bin<- ifelse(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc=="00",0,1)
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+    dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)) %>% 
+    janitor::tabyl(factor_inclusivo_real_hist_mas_autperc_bin,clus_pam_om2) %>%
+    janitor::chisq.test()
+#X-squared = 2.0428, df = 1, p-value = 0.1529
+#
+#
+message("Descartando valores negativos en sil width")
+chisq.test(
+with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(pueblo_originario_01 , clus_pam_om2))
+)
+```
+
+Tampoco se observa asociación alguna. Hicimos una prueba post-hoc usando Bonferroni
+
+
+##### 2.1.3.b. Comparación covariables- Mortalidad
+
+```{r 21l-comp-cov-mortalidad}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+# 
+invisible("No hay nada, el tiempo promedio de censura es similar")
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+  dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)) %>% 
+  janitor::tabyl(clus_pam_om2,death_time_rec) %>% 
+  dplyr::mutate(`1`= paste0(`1`," (", scales::percent(`1`/(`0`+`1`), accuracy=.1),")")) %>% 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+  dplyr::group_by(clus_pam_om2) %>% 
+  dplyr::summarise(mean=sprintf("%1.1f",mean(cens_time)),
+  median=sprintf("%1.1f",quantile(cens_time, .5)), p25=sprintf("%1.1f",quantile(cens_time, .25)), p75=sprintf("%1.1f",quantile(cens_time, .75))), by="clus_pam_om2") %>% 
+  dplyr::select(-`0`) %>% 
+  knitr::kable("markdown", col.names=c("Conglomerado","Mortalidad observada", "Promedio", "Mediana", "Q1", "Q3"), caption="Post-hoc, conglomerado vs. Mortalidad y tiempo a censura")
+```
+
+
+```{r 21l-comp-cov-mortalidad15}
+# Cargar las librerías necesarias
+library(survival)
+library(ggplot2)
+
+# Crear la variable de supervivencia
+surv_obj <- Surv(time = ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$death_time,
+                 event = ifelse(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$death_time==60,0,1))
+
+# Realizar el análisis de Log-Rank (survdiff)
+surv_diff <- survdiff(surv_obj ~ clus_pam_om2,
+                      data = ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)
+
+# Mostrar los resultados del test
+print(surv_diff)
+
+# Ajustar el modelo de Kaplan-Meier
+km_fit <- survfit(surv_obj ~ clus_pam_om2,
+                  data = ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)
+
+# Extraer los datos del modelo Kaplan-Meier para usar con ggplot
+km_data <- data.frame(
+  time = km_fit$time,
+  surv = km_fit$surv,
+  upper = km_fit$upper,
+  lower = km_fit$lower,
+  strata = rep(c("6035, Un trimestre, TSM(2)","6025, Un trimestre, TUS(1)"), km_fit$strata)
+)
+
+# Crear el gráfico de Kaplan-Meier con ggplot2
+ggplot(km_data, aes(x = time, y = surv, color = strata)) +
+  geom_step(size = 1.2) +  # Curvas de supervivencia
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = strata), alpha = 0.2, color = NA) +  # Intervalos de confianza
+  labs(
+    title = "Curvas de Kaplan-Meier",
+    x = "Tiempo (meses)",
+    y = "Probabilidad de Supervivencia",
+    color = "Grupo",
+    fill = "Grupo"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = c("#E2725B", "#D2B48C")) +  # Colores para las curvas
+  scale_fill_manual(values = c("#E2725B", "#D2B48C"))    # Colores para las áreas sombreadas
+```
+
+```{r 21m-comp-cov-mortalidad2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+             dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)) %>% 
+             janitor::tabyl(death_time_rec,clus_pam_om2) %>% 
+              janitor::chisq.test(correct=T)
+#X-squared = 11.293, df = 6, p-value = 0.07972
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+             dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)) %>% 
+             janitor::tabyl(death_time_rec,clus_pam_om2) %>% 
+              janitor::fisher.test(simulate.p.value=T, B=1e5)
+#p-value = 0.04477
+
+message("Descartando valores negativos en sil width")
+chisq_cramerv(
+with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)%>% 
+             dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)), table(death_time_rec , clus_pam_om2))
+)
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+tab_cl_mortalidad_pam_om2_m<- 
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+  dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)) |> 
+  janitor::tabyl(death_time_rec,clus_pam_om2) |> 
+  as.matrix(ncol=2)
+
+labels_pam_om2_m <- c(
+  "6035, Un trimestre, TSM(2)",
+  "6025, Un trimestre, TUS(1)"
+)
+# Realizar el análisis y crear la tabla directamente
+pairwise.prop.test(t(tab_cl_mortalidad_pam_om2_m[,2:ncol(tab_cl_mortalidad_pam_om2_m)]), p.adjust.method = "holm")$p.value |>
+  as.table() |>
+  as.data.frame() |>
+  rename(Grupo_1 = Var1, Grupo_2 = Var2, p_value = Freq) |>
+  filter(!is.na(p_value)) |>
+  mutate(
+    Grupo_1 = labels_pam_om2_m[as.numeric(Grupo_1)],
+    Grupo_2 = labels_pam_om2_m[as.numeric(Grupo_2)],
+    p_value = ifelse(p_value <.001, "<.001", sprintf("%1.3f",p_value)) 
+  ) |>
+  kable(
+    col.names = c("Grupo 1", "Grupo 2", "Valor p ajustado"),
+    align = "l",
+    caption= "Corrección parcial por comparaciones múltiples (Holm–Bonferroni)"
+  )
+```
+
+Se constata una asociación entre la pertenencia a un conglomerado y mortalidad, siendo 6025, Un trimestre, TUS(1)	mayor sus chances de mortalidad.
+
+
+##### 2.1.3.c. Comparación covariables- no RM vs. RM
+
+```{r 21n-comp-cov-RMnoRM}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+chisq_cramerv(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base))
+# $chisq_statistic
+# [1] "26.58"
+# 
+# $chisq_df
+# df 
+#  1 
+# 
+# $chisq_p_value
+# [1] "<0.001"
+# 
+# $cramers_v
+# [1] "0.07"
+
+message("Descartando valores negativos en sil width")
+chisq_cramerv(
+with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(codigo_region_rec_base , clus_pam_om2))
+)
+
+
+table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base) %>% 
+    data.frame() |>  
+    dplyr::group_by(Var1) |> 
+    dplyr::mutate(perc= scales::percent(Freq/sum(Freq), accuracy=1)) |> 
+    dplyr::ungroup() |> 
+    dplyr::mutate(Freq= Freq)  |>
+    dplyr::mutate(fp= paste0(Freq, " (", perc,")" )) |> 
+    dplyr::select(-Freq, -perc) |> 
+    tidyr::pivot_wider(names_from="Var2",values_from="fp")  |> 
+  knitr::kable("markdown", caption="Frecuencias absolutas y relativas por fila", col.names= c("Conglomerados", "Fuera de RM", "En RM"))
+```
+
+Al parecer, el conglomerado 6025, Un trimestre, TUS(1) tendría una proporción significativamente mayor que el resto de pacientes fuera de la RM, aunque con una fuerza de asociación débil.
+
+```{r 21n-comp-cov-RMnoRM_c, class="scrollable-code"}
+chisq.posthoc.test(
+table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)
+) %>% 
+  dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
+  #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
+  group_by(Dimension) %>%
+  summarise(across(2:(ncol(.)-1),
+                   ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")"))) %>%
+  dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.)) %>% 
+  #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.)) %>% 
+  #dplyr::mutate(Dimension= tab_clus_macrozona_pam_om4_q[1]) %>% 
+  knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-RM vs. No-RM")
+```
+
+De la tabla anterior, se observa que participantes pertenecientes al conglomerado "6025, Un trimestre, TUS(1)" presenta una menor proporción de residentes de la Región Metropolitana.
+
+
+##### 2.1.3.e. Comparación covariables- Región
+
+```{r 21n-comp-cov-reg1}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+tab_cluster_region_pam_om2_m<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+  dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))%>%
+  dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
+                    by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") %>% 
+  janitor::tabyl(codigo_region, clus_pam_om2) %>% 
+  janitor::adorn_percentages("col") %>% 
+  janitor::adorn_rounding(digits = 2)
+
+#colnames(tab_cluster_region_pam_om4_q)<- c("reg", "c1", "c4", "c3", "c5", "c6", "c7", "c8", "c9", "c2")
+cod_reg_homo_pam_om2_m<-
+data.frame(
+  codigo_region = 1:16,
+  nombre_region = c(
+    "Región de Tarapacá",
+    "Región de Antofagasta",
+    "Región de Atacama",
+    "Región de Coquimbo",
+    "Región de Valparaíso",
+    "Región del Libertador General Bernardo O'Higgins",
+    "Región del Maule",
+    "Región del Biobío",
+    "Región de La Araucanía",
+    "Región de Los Lagos",
+    "Región de Aysén del General Carlos Ibáñez del Campo",
+    "Región de Magallanes y de la Antártica Chilena",
+    "Región Metropolitana de Santiago",
+    "Región de Los Ríos",
+    "Región de Arica y Parinacota",
+    "Región de Ñuble"
+  ),
+  stringsAsFactors = FALSE
+)
+
+dplyr::mutate(tab_cluster_region_pam_om2_m, promedio_fila = rowMeans(across(2:length(colnames(tab_cluster_region_pam_om2_m))))) %>% 
+  dplyr::arrange(desc(promedio_fila)) %>% 
+  dplyr::left_join(cod_reg_homo_pam_om7_q, by="codigo_region") %>% 
+  dplyr::select(codigo_region, nombre_region, everything()) %>% 
+  dplyr::select(-promedio_fila) %>% 
+  dplyr::mutate_at(3:(length(colnames(tab_cluster_region_pam_om2_m))+1),~scales::percent(.)) %>% 
+  knitr::kable(caption="Porcentaje por región")
+```
+
+A partir de la tabla, salta a la vista un importante porcentaje de pacientes clasificados en el conglomerado 6025, Un trimestre, TUS (19% vs. 6%) que fue atendido en la Región de Los Lagos y en la Región de Valparaíso (12% vs. 8%). 
+
+
+```{r 21o-comp-cov-reg2a}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+tab_clus_reg_pam_om2_m<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+    dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))%>%
+    dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
+                      by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") %>% 
+    janitor::tabyl(codigo_region, clus_pam_om2)
+
+chisq_cramerv(tab_clus_reg_pam_om2_m[,-1])
+# $chisq_statistic
+# [1] "184.78"
+# 
+# $chisq_df
+# df 
+# 15 
+# 
+# $chisq_p_value
+# [1] "<0.001"
+# 
+# $cramers_v
+# [1] "0.17"
+
+janitor::fisher.test(tab_clus_reg_pam_om2_m, simulate.p.value=T, B=1e5)
+#p-value = 1e-05
+
+message("Descartando valores negativos en sil width")
+chisq_cramerv(
+with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens , !rn %in% sil_neg_pam_om_clus2_m)%>% 
+       dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))%>%
+    dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") , table(codigo_region , clus_pam_om2))
+)
+```
+
+Se encuentra una asociación significativa aunque débil entre región y conglomerados.
+
+Por macrozona
+
+```{r 21p-comp-cov-reg3}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+tab_clus_macrozona_pam_om2_m<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+  dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))%>%
+  dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
+                    by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") %>% 
+dplyr::mutate(macrozona = dplyr::case_when(
+  codigo_region %in% c(15, 1, 2, 3) ~ "Macrozona Norte",
+  codigo_region %in% c(4, 5)~ "Macrozona Centro",
+  codigo_region %in% c(6, 7, 16, 8) ~ "Macrozona Centro Sur",
+  codigo_region %in% c(9, 14, 10) ~ "Macrozona Sur",
+  codigo_region %in% c(11, 12) ~ "Macrozona Austral",
+  TRUE ~ "RM"  # En caso de que algún código no esté especificado
+)) %>% 
+  janitor::tabyl(macrozona, clus_pam_om2) 
+
+chisq_cramerv(tab_clus_macrozona_pam_om2_m[,-1])
+# $chisq_statistic
+# [1] "100.16"
+# 
+# $chisq_df
+# df 
+#  5 
+# 
+# $chisq_p_value
+# [1] "<0.001"
+# 
+# $cramers_v
+# [1] "0.13"
+
+message("Descartando valores negativos en sil width")
+chisq_cramerv(
+with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)%>% 
+       dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))%>%
+  dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
+                    by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") %>% 
+dplyr::mutate(macrozona = dplyr::case_when(
+  codigo_region %in% c(15, 1, 2, 3) ~ "Macrozona Norte",
+  codigo_region %in% c(4, 5)~ "Macrozona Centro",
+  codigo_region %in% c(6, 7, 16, 8) ~ "Macrozona Centro Sur",
+  codigo_region %in% c(9, 14, 10) ~ "Macrozona Sur",
+  codigo_region %in% c(11, 12) ~ "Macrozona Austral",
+  TRUE ~ "RM"  # En caso de que algún código no esté especificado
+)) , table(macrozona, clus_pam_om2))
+)
+
+tab_clus_macrozona_pam_om2_m %>%
+  janitor::adorn_percentages("col") %>%
+  janitor::adorn_rounding(digits = 2) %>%
+  dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.0f%%)", tab_clus_macrozona_pam_om2_m[[cur_column()]], . * 100))) |> 
+  knitr::kable(caption="Porcentajes por columna, conglomerado vs. macrozona")
+```
+
+Hay una asociación significativa aunque débil entre macrozona y pertenencia a cluster.
+
+El conglomerado 6025, Un trimestre, TUS (1) concentra un porcentaje reducido en la Macrozona Centro (9% vs. 13%). Por otro lado, pacientes en 6025, Un trimestre, TUS (1) pertenecen en mayor proporción a la Macrozona Sur (26% vs. 14%), aunque menor en la Macrozona Norte (4% vs. 8%).
+
+
+<div class="scrollable-content">
+
+```{r 21p-comp-cov-reg3b, class="scrollable-code"}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+chisq.posthoc.test(tab_clus_macrozona_pam_om2_m[-1]) %>% 
+  dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
+  #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
+  group_by(Dimension) %>%
+  summarise(across(2:(ncol(.)-1),
+                   ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")"))) %>%
+  dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.)) %>% 
+  dplyr::mutate(Dimension= tab_clus_macrozona_pam_om2_m[1]) %>% 
+  knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Macrozona")
+```
+</div>
+
+<div class="scrollable-content">
+
+```{r 21p-comp-cov-reg3c, class="scrollable-code"}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+#| 
+pairwise_chisq_gof_test(tab_clus_macrozona_pam_om2_m[-1], p.adjust.method="holm")|> 
+  knitr::kable("markdown", caption="Dependencia categórica sol. 2 conglomerados (mensual), por pares de categorías en Macrozona (corrección Holm-Bonferroni)")
+
+#Groups sharing a letter are not significantlt different (alpha = 0.05)
+```
+</div>
+
+Las pruebas post-hoc muestran que un mayor porcentaje de pacientes clasificados en 6035, Un trimestre, TSM(2) se concentran en la macrozona norte y menos en la macrozona sur y centro. En cambio, 6025, Un trimestre, TUS(1) concentra un mayor porcentaje en la macrozona sur y centro, mientras que menos en la macrozona norte.
+
+
+##### 2.1.3.f. Comparación covariables- Sexo
+
+```{r 21r-comp-cov-sex1}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+tab_clus_sexo_pam_om2_m<-  
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+    janitor::tabyl(glosa_sexo, clus_pam_om2 )
+
+chisq_cramerv(tab_clus_sexo_pam_om2_m[,-1])
+# $chisq_statistic
+# [1] "191.47"
+# 
+# $chisq_df
+# df 
+#  1 
+# 
+# $chisq_p_value
+# [1] "<0.001"
+# 
+# $cramers_v
+# [1] "0.18"
+#  
+message("Descartando valores negativos en sil width")
+chisq_cramerv(with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(glosa_sexo, clus_pam_om2))
+)
+
+tab_clus_sexo_pam_om2_m%>% 
+  janitor::adorn_percentages("col") %>% 
+  janitor::adorn_rounding(digits = 2) %>% 
+  dplyr::mutate(across(-glosa_sexo, ~sprintf("%d (%.0f%%)", tab_clus_sexo_pam_om2_m[[cur_column()]],.*100)))|> 
+  #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
+  knitr::kable(caption="Porcentajes por columna, conglomerado vs. sexo")
+```
+
+Hay una asociación con una fuerza débil-moderada entre la pertenencia a un conglomerado y el sexo. Entre pacientes clasificados a 6025, Un trimestre, TUS(1) hay un menor porcentaje de mujeres (30% vs. 57%).
+
+
+```{r 21s-comp-cov-sex2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+chisq.posthoc.test(tab_clus_sexo_pam_om2_m[-1])%>% 
+    dplyr::mutate(Dimension= rep(c("HOMBRE", "MUJER"), each=2)) %>% 
+    dplyr::filter(Dimension=="MUJER") %>%
+    dplyr::mutate(across(3:ncol(.), ~ dplyr::case_when(Value=="Residuals"~ sprintf("%1.2f", as.numeric(.)), Value=="p values"~ sprintf("%1.3f", as.numeric(gsub("\\*","",.)))))) %>% 
+  dplyr::mutate(across(3:ncol(.), ~ dplyr::case_when(Value=="p values" & .=="0.000"~"<0.001",T~.))) %>% 
+  knitr::kable("markdown", caption="Post-hoc, conglomerado vs. sexo")
+```
+
+```{r 21s-comp-cov-sex3}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+pairwise_chisq_gof_test(tab_clus_sexo_pam_om2_m[-1], p.adjust.method="holm")|> 
+  dplyr::mutate(p= dplyr::case_when(p<0.001~ "<0.001",T~ sprintf("%1.3f",p)))|> 
+  dplyr::mutate(p.adj= dplyr::case_when(p.adj<0.001~ "<0.001",T~ sprintf("%1.3f",p.adj)))|> 
+  knitr::kable("markdown", caption="Dependencia categórica sol. 2 conglomerados (mensual), por pares de categorías en Sexo (corrección Holm-Bonferroni)") 
+```
+
+
+##### 2.1.3.g. Comparación covariables- Edad
+
+```{r 21t-edad-plot}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Edad promedio primer ingreso con intervalo de confianza por conglomerado"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 8
+#| fig-dpi: 600
+
+dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
+  dplyr::filter(month == 0) %>%
+  dplyr::inner_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run","clus_pam_om2")], by="run") %>%
+  dplyr::group_by(clus_pam_om2) %>%
+  dplyr::summarise(mean_edad = mean(min_edad_anos),
+                   sd= sd(min_edad_anos),
+                   ci_lower = mean(min_edad_anos) - qt(0.975, n()-1) * sd(min_edad_anos)/sqrt(n()),
+                   ci_upper = mean(min_edad_anos) + qt(0.975, n()-1) * sd(min_edad_anos)/sqrt(n())) %>% # Plot con ggplot2
+ggplot(aes(x = clus_pam_om2, y = mean_edad)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
+  labs(title = NULL,
+       x = "Conglomerado",
+       y = "Edad promedio") +
+  theme_minimal()+
+  coord_flip()
+
+ggsave("_figs/edad_minima_por_cluster_pam_om2_m.png", dpi=600)
+```
+
+```{r 21u-anova-edad}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+
+t.test(min_edad_anos ~ clus_pam_om2, 
+             data = dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
+               dplyr::filter(month == 0) %>%
+               dplyr::inner_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run","clus_pam_om2")], by="run"),var.equal = T)
+
+
+dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
+    dplyr::filter(month == 0) %>%
+    dplyr::inner_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om2")], by = "run") %>%
+  {
+    cohen.d(
+     .$min_edad_anos,
+     .$clus_pam_om2)
+  }
+# d estimate: -0.4448548 (small)
+# 95 percent confidence interval:
+#      lower      upper 
+# -0.5240079 -0.3657017 
+
+message("Descartando valores negativos en sil width")
+dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
+    dplyr::filter(month == 0) %>%
+    dplyr::inner_join(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)[,c("run","clus_pam_om2")], by="run")%>%
+  {
+    cohen.d(
+     .$min_edad_anos,
+     .$clus_pam_om2)
+  }
+
+```
+
+Los resultados del test de Welch indicaron que la diferencia de medias entre el conglomerado 6035, Un trimestre, TSM(2) (𝑀 = 20.5) y el grupo 6025, Un trimestre, TUS(1) (𝑀=22.5) fue estadísticamente significativa,𝑡(6036)=−11.07 𝑝<0.001, con un intervalo de confianza del 95% de [−2.56,−1.58]. y un tamaño del efecto pequeño (Cohen D= -0.46).
+
+
+##### 2.1.3.h. Comparación covariables- Previsión
+
+```{r 21v-prevision-a}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+tab_clus_prev_pam_om2_m<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>%
+    janitor::tabyl(prev_benef_rec_post, clus_pam_om2)
+
+tab_clus_prev_pam_om2_m%>% 
+  {
+     print(janitor::chisq.test(.))
+     print(janitor::fisher.test(., simulate.p.value = T, B = 1e5))
+  }
+#X-squared = 11.459, df = 4, p-value = 0.02186
+#p-value = 0.01693
+
+subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m) %>%
+    janitor::tabyl(prev_benef_rec_post, clus_pam_om2)%>% 
+  {
+     print(janitor::chisq.test(.))
+     print(janitor::fisher.test(., simulate.p.value = T, B = 1e5))
+  }
+
+tab_clus_prev_pam_om2_m%>% 
+  janitor::adorn_percentages("col") %>% 
+  janitor::adorn_rounding(digits = 3) %>% 
+  dplyr::mutate(across(-prev_benef_rec_post, ~sprintf("%d (%.0f%%)", tab_clus_prev_pam_om2_m[[cur_column()]],.*100)))|>
+  #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
+  knitr::kable(caption="Porcentajes por columna, conglomerado vs. Beneficios")
+```
+
+
+```{r 21v-prevision-a2}
+
+chisq.posthoc.test(tab_clus_prev_pam_om2_m[-1]) %>% 
+    dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
+    #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
+    group_by(Dimension) %>%
+    summarise(across(2:(ncol(.)-1),
+                     ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")"))) %>%
+    dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.)) %>% 
+    #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.)) %>% 
+    dplyr::mutate(Dimension= dplyr::pull(tab_clus_prev_pam_om2_m[1])) %>% 
+    knitr::kable("markdown", caption="Comparación post-hoc, conglomerado- Previsión")
+```
+
+
+La asociación es levemente significativa y muy débil. Pacientes clasificados en 6035, Un trimestre, TSM(6) presenta un mayor porcentaje de pacientes en este conglomerado en una previsión de FFAA. Con todo, esta asociación no es consistente en las distintas pruebas.
+
+
+##### 2.1.3.i. Comparación covariables- Niv. Complejidad
+
+```{r 21w-nivcomp}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+tab_clus_compl_pam_om2_m<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>% 
+  dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))%>%
+  dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
+                    by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") %>% 
+  janitor::tabyl(nivel_de_complejidad, clus_pam_om2) 
+
+tab_clus_compl_pam_om2_m%>% 
+  janitor::adorn_percentages("col") %>% 
+  janitor::adorn_rounding(digits = 2) %>% 
+  dplyr::mutate(across(-nivel_de_complejidad, ~sprintf("%d (%.0f%%)", tab_clus_compl_pam_om2_m[[cur_column()]],.*100)))|>
+  #dplyr::mutate_at(2:ncol(.), ~scales::percent(as.numeric(.), accuracy=.1)) %>% 
+  knitr::kable(caption="Tabla de contingencia, Niv. de complejidad (proporción por columna)")
+```
+
+
+```{r 21w-nivcomp2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+chisq.posthoc.test(tab_clus_compl_pam_om2_m[-1]) %>% 
+    dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
+    #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
+    group_by(Dimension) %>%
+    summarise(across(2:(ncol(.)-1),
+                     ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")"))) %>%
+    dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.)) %>% 
+    #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.)) %>% 
+    dplyr::mutate(Dimension= dplyr::pull(tab_clus_compl_pam_om2_m[1])) %>% 
+    knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Niv. complejidad")
+```
+
+A partir de la tabla de contingencia y la prueba de residuos, se observa que 6025, Un trimestre, TUS(1) presenta un mayor porcentaje en establecimientos de Alta complejidad (68% vs. 61%) y menores porcentajes en Mediana complejidad (12% vs. 20%) y mayor porcentaje de casos con calificación Pendiente (3% vs. 1%). 
+
+
+
+#### 2.1.4. Compilación comparación covariables
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Comparación covariables con agrupamiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 10
+#| fig-dpi: 600
+#| 
+
+#dput(attr(t(tab_clus_compl_pam_om7_q),"dimnames")[[1]])
+
+# Definir los datos correctamente
+data_pam_om2_m <-cbind.data.frame(
+  Grupo= c("6035, Un trimestre, TSM(2)", "6025, Un trimestre, TUS(1)"), 
+      PPOO_bin            = c(NA, NA), 
+      PPOO_sinautoid          = c(NA, NA), 
+      PPOO_conautoid          = c(NA, NA), 
+      Mortalidad              = c(NA, "+"), 
+      RM                      = c(NA, "-"), 
+      `Macrozona-Austral`       = c(NA, NA), 
+      `Macrozona-Centro`        = c(NA, "-"), 
+      `Macrozona-Centro Sur`    = c(NA, NA), 
+      `Macrozona-Norte`        = c(NA, "-"), 
+      `Macrozona-Sur`         = c(NA, "+"), 
+      Sexo_mujeres             = c(NA, "-"), 
+      `Edad ingreso`         = c(NA, "+"), 
+      `Previsión-FFAA`         = c(NA, NA), 
+      `Previsión-FONASA A`     = c(NA, NA), 
+      `Previsión-FONASA BC`     = c(NA, NA), 
+      `Previsión-FONASA D`     = c(NA, NA), 
+      `Previsión-ISAPRE`     = c(NA, NA), 
+      `NivComp-Baja`     = c(NA, NA), 
+      `NivComp-Media`     = c(NA, "+"), 
+      `NivComp-Alta`     = c(NA, "-"))
+#
+# Asegurar que los nombres de las columnas sean válidos y no haya espacios en blanco
+# Derretir el dataframe para que sea adecuado para ggplot2
+data_melt_pam_om2_m <- reshape2::melt(data_pam_om2_m, id.vars = 'Grupo', variable.name = 'Variable', value.name = 'Asociación')
+
+# Reemplazar los NA por un valor vacío
+data_melt_pam_om2_m$Asociación[is.na(data_melt_pam_om2_m$Asociación)] <- "\n"
+
+# Crear el gráfico con ggplot
+data_melt_pam_om2_m %>% 
+  dplyr::mutate(Variable = gsub("_", " ", Variable)) %>% 
+ggplot(aes(x = Variable, y = Grupo, fill = Asociación)) +
+  geom_tile(color = "white", size = 0.8) +
+  scale_fill_manual(values = c("+" = "#556B2F", "-" = "#E2725B", "\n" = "white")) +
+  labs(title =NULL, x = "Variables", y = "Conglomerado") +
+  theme_minimal() +
+  theme(#axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid = element_blank())+
+  theme(
+    axis.text.y = element_text(size = 17, face = "bold"),#,margin = margin(l = 7)),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 17, face = "bold", angle = 45, hjust = 1),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 16, face = "bold"),#,margin = margin(t = -15)),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 16, face = "bold"),          # Tamaño del título del eje Y
+    plot.title = NULL,  # Tamaño y estilo del título del gráfico
+    legend.title = element_text(size = 17, face = "bold"),          # Tamaño del título de la leyenda
+    legend.spacing.y = unit(1.5, "lines"),
+    legend.box.spacing = unit(0.5, "lines"),      # Controla el espacio entre la leyenda y el gráfico
+    legend.margin = margin(5, 5, 5, 5),  
+    legend.key.height = unit(1, "cm"),  
+    legend.text = element_text(size = 15, face = "bold")            # Tamaño del texto de la leyenda
+  ) +
+  coord_flip()
+ggsave("_figs/asociaciones_pam_om2_m.png", width=8.8*.8, height=5*.8, dpi=1000)
+
+```
+
+<br> 
+
+
+# Información de la sesión
+
+```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+message(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
+message(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
+message(paste0("Editor context: ", getwd()))
+
+save.image("avance250117_3.RData")
+```
+
+
+```{r session-info-r, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+#| class-output: center-table
+
+sesion_info <- devtools::session_info()
+dplyr::select(
+  tibble::as_tibble(sesion_info$packages),
+  c(package, loadedversion, source)
+) %>% 
+ knitr::kable(caption = "R packages", format = "html",
+      col.names = c("Row number", "Package", "Version"),
+    row.names = FALSE,
+      align = c("c", "l", "r")) %>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) %>% 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```
+
+
+```{r session-info-python, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+#| class-output: center-table
+
+reticulate::py_list_packages()%>% 
+ knitr::kable(caption = "Python packages", format = "html",
+      col.names = c("Package", "Version", "Requirement"),
+    row.names = FALSE,
+      align = c("c", "l", "r", "r"))%>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) %>% 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```

@@ -54,7 +54,7 @@ if(Sys.info()["sysname"]=="Windows"){
                        "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
                        "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
 } else {folder_path <- ""}
-load(paste0(folder_path,"avance250117_2.RData"))
+load(paste0(folder_path,"avance250117_2.RData"), verbose = TRUE)
 ```
 
 
@@ -818,14 +818,14 @@ invisible("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/
 # 
 invisible("Hacemos clasificación de pertenencia cluster y ponemos etiquetas")
 ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2 <-
-  factor(pamRange_month_lcs$clustering$cluster2,levels=rev(attr( sort(table(pamRange_month_lcs$clustering$cluster2)), "name")),
-         labels= c("6035, Un trimestre, TSM(2)", 
+  factor(pamRange_month_om$clustering$cluster2,levels=rev(attr( sort(table(pamRange_month_om$clustering$cluster2)), "name")),
+         labels= c("6035, Un trimestre, al menos un TSM(2)", 
                    "6025, Un trimestre, TUS(1)"
          ))
 
 invisible("Me da buena: 0,61 en promedio. Se mantiene. El problema está con 5710 es negativo")
 sil_pam_om_clus2_m_nostd<-
-  silhouette(as.integer(pamRange_month_om$clustering$cluster2), as.dist(dist_quarter_om))
+  silhouette(as.integer(pamRange_month_om$clustering$cluster2), as.dist(dist_month_om))
 
 # Crear etiquetas personalizadas
 cluster_labels2_m <- paste0("Cluster ", 
@@ -925,14 +925,9 @@ reshape2::melt(ppoo_clus_pre_pam_om2_m, id.vars = "glosa_pueblo_originario_rec")
       "NINGUNO"=".NINGUNO(n=9.156)")) %>% 
 ggplot(aes(x = glosa_pueblo_originario_rec, y = value, fill = variable)) + 
   geom_bar(stat = "identity", position = "fill") + 
-  scale_fill_manual(values =  c(
-  "6035, Un trimestre, TSM(6)" = "#D2B48C",
-  "6025, Un trimestre, TUS(5)" = "#E27A5B",
-  "Un semestre TSM(3)" = "#708090",
-  "5989, Comorbilidad un trimestre(4)" = "#6B8E23",
-  "6036, TSM, 1 año después, otras causas(7)" = "#506070",
-  "5710, TSM, 1 año después, TSM(1)" = "#2F4F4F",
-  "5935, TSM, 6 meses después, TSM(2)" = "#20B2AA"
+  scale_fill_manual(values =  c(#, al menos un TSM(2)
+  "6035, Un trimestre, al menos un TSM(2)" = "#D2B48C", 
+  "6025, Un trimestre, TUS(1)" = "#E27A5B"
 )) +
   labs(title = NULL,
        x = "Grupo Étnico",
@@ -1257,12 +1252,10 @@ seq_mean_t(States_Wide.seq_month_t_prim_adm_cens,
             color = "black", # Color del texto
             family = "sans", # Puedes cambiar la fuente si lo deseas
             background = element_rect(fill = "white", color = NA)) + # Fondo blanco
-  theme(legend.title = element_blank(), legend.position=c(.8,.85))
-
-invisible("No me aporta mucho")
+  theme(legend.title = element_blank(), legend.position="none")
 ```
 
-Observamos que aquellos en el conglomerado que se encuentra ingresada por trastornos de salud mental y luego vuelve, la duración de los ingresos relacionados con trastornos de salud mental son en promedio casi dos veces más largos. 
+Observamos que aquellos en el conglomerado que se encuentra ingresada por trastornos de salud mental tiene un porcentaje levemente mayor de censura.
 
 
 #### 2.1.3. Comparación variables
@@ -1297,7 +1290,7 @@ Vemos las categorías de clasificación de PPOO según autopercepción (en MINSA
 #| eval: true
 #| paged.print: true
 #| results: "hold"
-#| 
+
 chisq.test(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2))
 #X-squared = 3.5602, df = 2, p-value = 0.1686
 
@@ -1390,7 +1383,7 @@ km_data <- data.frame(
   surv = km_fit$surv,
   upper = km_fit$upper,
   lower = km_fit$lower,
-  strata = rep(c("6035, Un trimestre, TSM(2)","6025, Un trimestre, TUS(1)"), km_fit$strata)
+  strata = rep(c("6035, Un trimestre, al menos un TSM(2)","6025, Un trimestre, TUS(1)"), km_fit$strata)
 )
 
 # Crear el gráfico de Kaplan-Meier con ggplot2
@@ -1467,7 +1460,7 @@ pairwise.prop.test(t(tab_cl_mortalidad_pam_om2_m[,2:ncol(tab_cl_mortalidad_pam_o
   )
 ```
 
-Se constata una asociación entre la pertenencia a un conglomerado y mortalidad, siendo 6025, Un trimestre, TUS(1)	mayor sus chances de mortalidad.
+Se constata una asociación muy modesta entre la pertenencia a un conglomerado y mortalidad, siendo 6025, Un trimestre, TUS(1)	mayores sus chances de mortalidad.
 
 
 ##### 2.1.3.c. Comparación covariables- no RM vs. RM
@@ -1519,6 +1512,7 @@ chisq.posthoc.test(
 table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)
 ) %>% 
   dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
+  dplyr::filter(Dimension=="6025, Un trimestre, TUS(1)") |> 
   #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
   group_by(Dimension) %>%
   summarise(across(2:(ncol(.)-1),
@@ -2061,6 +2055,7 @@ data_melt_pam_om2_m$Asociación[is.na(data_melt_pam_om2_m$Asociación)] <- "\n"
 
 # Crear el gráfico con ggplot
 data_melt_pam_om2_m %>% 
+  dplyr::filter(Grupo=="6025, Un trimestre, TUS(1)")%>%
   dplyr::mutate(Variable = gsub("_", " ", Variable)) %>% 
 ggplot(aes(x = Variable, y = Grupo, fill = Asociación)) +
   geom_tile(color = "white", size = 0.8) +
@@ -2071,7 +2066,7 @@ ggplot(aes(x = Variable, y = Grupo, fill = Asociación)) +
         panel.grid = element_blank())+
   theme(
     axis.text.y = element_text(size = 17, face = "bold"),#,margin = margin(l = 7)),           # Tamaño de las etiquetas de los grupos étnicos
-    axis.text.x = element_text(size = 17, face = "bold", angle = 45, hjust = 1),           # Tamaño de las etiquetas del eje X
+    axis.text.x = element_text(size = 17, face = "bold"),           # Tamaño de las etiquetas del eje X
     axis.title.x = element_text(size = 16, face = "bold"),#,margin = margin(t = -15)),          # Tamaño del título del eje X
     axis.title.y = element_text(size = 16, face = "bold"),          # Tamaño del título del eje Y
     plot.title = NULL,  # Tamaño y estilo del título del gráfico

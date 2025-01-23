@@ -1506,6 +1506,7 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
   knitr::kable("markdown", col.names=c("Conglomerado","Mortalidad observada", "Promedio"), caption="Post-hoc, conglomerado vs. Mortalidad y tiempo a censura")
 ```
 
+<div class="scrollable-content">
 ```{r 12m-comp-cov-mortalidad2}
 #| message: true
 #| include: true
@@ -1567,6 +1568,7 @@ pairwise.prop.test(t(tab_cl_mortalidad_pam_om7_q[,2:ncol(tab_cl_mortalidad_pam_o
     caption= "Corrección parcial por comparaciones múltiples (Holm–Bonferroni)"
   )
 ```
+</div>
 
 No se constata una asociación entre la pertenencia a un conglomerado y mortalidad.
 
@@ -1943,6 +1945,7 @@ chisq.posthoc.test(tab_clus_sexo_pam_om7_q[-1])%>%
   knitr::kable("markdown", caption="Post-hoc, conglomerado vs. sexo")
 ```
 
+<div class="scrollable-content">
 ```{r 12s-comp-cov-sex3}
 #| message: true
 #| include: true
@@ -1956,6 +1959,7 @@ pairwise_chisq_gof_test(tab_clus_sexo_pam_om7_q[-1], p.adjust.method="holm")|>
   dplyr::mutate(p.adj= dplyr::case_when(p.adj<0.001~ "<0.001",T~ sprintf("%1.3f",p.adj)))|> 
   knitr::kable("markdown", caption="Dependencia categórica sol. 7 conglomerados, por pares de categorías en Sexo (corrección Holm-Bonferroni)") 
 ```
+</div>
 
 Los conglomerados con mayor porcentaje de mujeres son 6035, Un trimestre, TSM(6), 6036, TSM, 1 año después, otras causas(7) y 5935, TSM, 6 meses después, TSM(2). En cambio,5989, Comorbilidad un trimestre(4) y 6025, Un trimestre, TUS(5) tienen un menor porcentaje de mujeres.
 
@@ -2032,7 +2036,7 @@ with(dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
      )
 ```
 
-
+<div class="scrollable-content">
 ```{r 12u-anova-edad2}
 #| message: true
 #| include: true
@@ -2066,6 +2070,7 @@ rstatix::games_howell_test(min_edad_anos ~ clus_pam_om7,data = dt_ing_calendar_q
      )
 
 ```
+</div>
 
 Si bien la asociación entre edad mínima de ingreso es signifciatva, tiene un tamaño del efecto débil. Particularmente, pacientes clasificados en 6025, Un trimestre, TUS(5) tienden a ser mayores que el resto de los pacientes en otros conglomerados, salvo 5989, Comorbilidad un trimestre(4). Este último es mayor que el resto de los otros conglomerados, ubicándose en torno a los 22-23 años. Por último, 6035, Un trimestre, TSM(6) tiene pacientes con un promedio de edad mayor a 5935, TSM, 6 meses después, TSM(2) y 5939, Un semestre TSM(3).
 
@@ -2101,7 +2106,7 @@ tab_clus_prev_pam_om7_q%>%
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. Beneficios")
 ```
 
-
+<div class="scrollable-content">
 ```{r 12v-prevision-b}
 #| message: true
 #| include: true
@@ -2145,6 +2150,7 @@ chisq.posthoc.test(tab_clus_prev_pam_om7_q[,-1]) %>%
 pairwise_chisq_gof_test(tab_clus_prev_pam_om7_q[-1], p.adjust.method="holm")|> 
     knitr::kable("markdown", caption="Dependencia categórica sol. 7 conglomerados, por pares de categorías en Previsión (corrección Holm-Bonferroni)")
 ```
+</div>
 
 La asociación es lvemente significativa y muy débil. Si no se incluyen los valores con ASW negativos, la asociación no es significativa.
 
@@ -2178,7 +2184,6 @@ tab_clus_compl_pam_om7_q%>%
 
 A partir de la tabla de contingencia, se observa que 5939, Un semestre TSM(3)	y 5935, TSM, 6 meses después, TSM(2)
  presentan menores porcentajes de ingresos en establecimientos de Alta complejidad (~50%) y mayores en mediana complejidad (~27%). En contraste, pacientes clasificados en 5989, Comorbilidad un trimestre(4), 6025, Un trimestre, TUS(5) y 6036, TSM, 1 año después, otras causas(7)	se encuentran en mayor proporción en establecimientos de Alta complejidad.
-
 
 ```{r 12x-nivcomp-posthoc}
 #| message: true
@@ -2223,10 +2228,23 @@ chisq.posthoc.test(tab_clus_compl_pam_om7_q[-1]) %>%
     #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.)) %>% 
     dplyr::mutate(Dimension= dplyr::pull(tab_clus_compl_pam_om7_q[1])) %>% 
     knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Niv. complejidad")
+```
+
+
+<div class="scrollable-content">
+```{r 12x-nivcomp-posthoc2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
 
 pairwise_chisq_gof_test(tab_clus_compl_pam_om7_q[-1], p.adjust.method="holm")|> 
     knitr::kable("markdown", caption="Dependencia categórica sol. 7 conglomerados, por pares de categorías en Niv. Complejidad (corrección Holm-Bonferroni)")
 ```
+</div>
 
 <!-- Alta Complejidad -->
 <!-- 6025, Un trimestre, TUS(5) -->

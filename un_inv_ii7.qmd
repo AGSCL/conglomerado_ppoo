@@ -37,6 +37,8 @@ pre.scrollable-code {
 
 # Configurar
 
+
+<div class="scrollable-content">
 ```{r}
 #| message: true
 #| include: true
@@ -56,7 +58,7 @@ if(Sys.info()["sysname"]=="Windows"){
 } else {folder_path <- ""}
 load(paste0(folder_path,"avance250117_2.RData"), verbose = TRUE)
 ```
-
+</div>
 
 
 # Paquetes estadísticos
@@ -845,7 +847,7 @@ fviz_silhouette(
 ggsave("_figs/sil_plot_pam_om2_m.png", width = 8, height = 5, dpi = 500)
 ```
 
-De la figura se desprende que el conglomerado 6035, Un año despues, TSM tiene un ajuste promedio negativo. En menor medida, el conglomerado 6036, TSM, 1 año después, otras causas, tiene algunos valores de ancho de silueta negativos. Posteriormente vemos una tabla de contingencia para entender el origen de los nuevos conglomerados.
+De la figura se desprende que el conglomerado 6035, un trimestre, al menos un TSM(2) tiene un ajuste promedio negativo. En menor medida, el conglomerado 6036, TSM, 1 año después, otras causas, tiene algunos valores de ancho de silueta negativos. Posteriormente vemos una tabla de contingencia para entender el origen de los nuevos conglomerados.
 
 
 ```{r 21a2}
@@ -1734,7 +1736,7 @@ pairwise_chisq_gof_test(tab_clus_macrozona_pam_om2_m[-1], p.adjust.method="holm"
 ```
 </div>
 
-Las pruebas post-hoc muestran que un mayor porcentaje de pacientes clasificados en 6035, Un trimestre, TSM(2) se concentran en la macrozona norte y menos en la macrozona sur y centro. En cambio, 6025, Un trimestre, TUS(1) concentra un mayor porcentaje en la macrozona sur y centro, mientras que menos en la macrozona norte.
+Las pruebas post-hoc muestran que un mayor porcentaje de pacientes clasificados en 6035, un trimestre, al menos un TSM(2) se concentran en la macrozona norte y menos en la macrozona sur y centro. En cambio, 6025, Un trimestre, TUS(1) concentra un mayor porcentaje en la macrozona sur y centro, mientras que menos en la macrozona norte.
 
 
 ##### 2.1.3.f. Comparación covariables- Sexo
@@ -1890,7 +1892,7 @@ dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
 
 ```
 
-Los resultados del test de Welch indicaron que la diferencia de medias entre el conglomerado 6035, Un trimestre, TSM(2) (𝑀 = 20.5) y el grupo 6025, Un trimestre, TUS(1) (𝑀=22.5) fue estadísticamente significativa,𝑡(6036)=−11.07 𝑝<0.001, con un intervalo de confianza del 95% de [−2.56,−1.58]. y un tamaño del efecto pequeño (Cohen D= -0.46).
+Los resultados del test de Welch indicaron que la diferencia de medias entre el conglomerado 6035, un trimestre, al menos un TSM(2) (𝑀 = 20.5) y el grupo 6025, Un trimestre, TUS(1) (𝑀=22.5) fue estadísticamente significativa,𝑡(6036)=−11.07 𝑝<0.001, con un intervalo de confianza del 95% de [−2.56,−1.58]. y un tamaño del efecto pequeño (Cohen D= -0.46).
 
 
 ##### 2.1.3.h. Comparación covariables- Previsión
@@ -1947,7 +1949,7 @@ chisq.posthoc.test(tab_clus_prev_pam_om2_m[-1]) %>%
 ```
 
 
-La asociación es levemente significativa y muy débil. Pacientes clasificados en 6035, Un trimestre, TSM(6) presenta un mayor porcentaje de pacientes en este conglomerado en una previsión de FFAA. Con todo, esta asociación no es consistente en las distintas pruebas.
+La asociación es levemente significativa y muy débil. Pacientes clasificados en 6035, un trimestre, al menos un TSM(6) presenta un mayor porcentaje de pacientes en este conglomerado en una previsión de FFAA. Con todo, esta asociación no es consistente en las distintas pruebas.
 
 
 ##### 2.1.3.i. Comparación covariables- Niv. Complejidad

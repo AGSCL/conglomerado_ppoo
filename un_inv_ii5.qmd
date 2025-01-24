@@ -3,6 +3,7 @@ title: "Paso 5 (1)- Trayectorias de hospitalización y mortalidad con foco en co
 description: |
   Representar las mejores opciones de agrupamiento, junto con su relación con otras variables. En esta etapa, analizamos la asociación con covariables de la solución con mejores índices de calidad para la resolución trimestral.
 date-format: "D [d]e MMM, YYYY"
+lang: es
 date: last-modified
 bibliography: [_lit/referencias.bib]
 csl: "_lit/american-medical-association.csl" # (Opcional: estilo de citas, p.ej., APA)
@@ -3486,8 +3487,8 @@ Se constata una asociación significativa aunque débil entre nivel de complejid
 #| paged.print: true
 #| fig.cap: "Comparación covariables con agrupamiento"
 #| results: "hold"
-#| fig-width: 8
-#| fig-height: 10
+#| fig-width: 11
+#| fig-height: 6
 #| fig-dpi: 600
 #| 
 
@@ -3526,6 +3527,7 @@ data_melt_pam_om4_q <- reshape2::melt(data_pam_om4_q, id.vars = 'Grupo', variabl
 data_melt_pam_om4_q$Asociación[is.na(data_melt_pam_om4_q$Asociación)] <- "\n"
 
 # Crear el gráfico con ggplot
+plot_data_melt_pam_om4_q<-
 data_melt_pam_om4_q %>% 
   dplyr::mutate(Variable = gsub("_", " ", Variable)) %>% 
 ggplot(aes(x = Variable, y = Grupo, fill = Asociación)) +
@@ -3536,20 +3538,20 @@ ggplot(aes(x = Variable, y = Grupo, fill = Asociación)) +
   theme(#axis.text.x = element_text(angle = 45, hjust = 1),
         panel.grid = element_blank())+
   theme(
-    axis.text.y = element_text(size = 17, face = "bold"),#,margin = margin(l = 7)),           # Tamaño de las etiquetas de los grupos étnicos
-    axis.text.x = element_text(size = 17, face = "bold"),           # Tamaño de las etiquetas del eje X
-    axis.title.x = element_text(size = 16, face = "bold"),#,margin = margin(t = -15)),          # Tamaño del título del eje X
-    axis.title.y = element_text(size = 16, face = "bold"),          # Tamaño del título del eje Y
+    axis.text.y = element_text(size = 17*.7, face = "bold"),#,margin = margin(l = 7)),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 17*.7, face = "bold"),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 16*.7, face = "bold"),#,margin = margin(t = -15)),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 16*.7, face = "bold"),          # Tamaño del título del eje Y
     plot.title = NULL,  # Tamaño y estilo del título del gráfico
-    legend.title = element_text(size = 17, face = "bold"),          # Tamaño del título de la leyenda
-    legend.spacing.y = unit(1.5, "lines"),
+    legend.title = element_text(size = 17*.7, face = "bold"),          # Tamaño del título de la leyenda
+    legend.spacing.y = unit(1.2, "lines"),
     legend.box.spacing = unit(0.5, "lines"),      # Controla el espacio entre la leyenda y el gráfico
     legend.margin = margin(5, 5, 5, 5),  
     legend.key.height = unit(1, "cm"),  
-    legend.text = element_text(size = 15, face = "bold")            # Tamaño del texto de la leyenda
+    legend.text = element_text(size = 15*.7, face = "bold")            # Tamaño del texto de la leyenda
   ) +
   coord_flip()
-ggsave("_figs/asociaciones_pam_om4_q.png", width=8.8*.8, height=5*.8, dpi=1000)
+ggsave(filename= "_figs/asociaciones_pam_om4_q.png", plot_data_melt_pam_om4_q, width=11*.8, height=6*.8, dpi=600)
 
 ```
 

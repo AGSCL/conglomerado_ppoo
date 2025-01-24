@@ -1,5 +1,5 @@
 ---
-title: "Paso 6 (3)- Trayectorias de hospitalización y mortalidad con foco en condiciones vinculadas a trastornos de salud mental y consumo de sustancias posterior a un primer ingreso por alguno de estos trastornos, en usuarios/as jóvenes y adultos emergentes de población general y pertenecientes a pueblos originarios, 2018-2021, Chile"
+title: "Paso 7 (3)- Trayectorias de hospitalización y mortalidad con foco en condiciones vinculadas a trastornos de salud mental y consumo de sustancias posterior a un primer ingreso por alguno de estos trastornos, en usuarios/as jóvenes y adultos emergentes de población general y pertenecientes a pueblos originarios, 2018-2021, Chile"
 description: |
   Análisis de sensibilidad para resolución mensual, utilizando aquella solución que obtuvo índices de calidad aceptables.
 date-format: "D [d]e MMM, YYYY"
@@ -1000,7 +1000,7 @@ seq_plot_pam_om2_m <- ggseqiplot(States_Wide.seq_month_t_prim_adm_cens,
     axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
     axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
     axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
-    strip.text = element_text(size = 10, margin = margin(b =-15, t=10)),
+    strip.text = element_text(size = 15, margin = margin(b =-15, t=10)),
     legend.text = element_text(size = 15),
     legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
     legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
@@ -1033,7 +1033,7 @@ ggsave(filename="_figs/clusters_pam_om2_m_mod.png", seq_plot_pam_om2_m,  width =
 #| paged.print: true
 #| fig.cap: "Trayectorias de hospitalización, frecuencia relativa de estados en un gráfico de barras apiladas por trimestre."
 #| results: "hold"
-#| fig-width: 9
+#| fig-width: 11
 #| fig-height: 5.5
 #| fig-dpi: 600
 #| label: 21plot-cluster2-grafico-trayectorias2
@@ -1049,14 +1049,14 @@ seq_plot2_pam_om2_m <- ggseqdplot(States_Wide.seq_month_t_prim_adm_cens,
     axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
     axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
     axis.title.y = element_text(size = 15, margin = margin(r = -5)),
-    strip.text = element_text(size = 11),
+    strip.text = element_text(size = 15),
     panel.spacing.y = unit(0.5, "lines"),
     strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
     strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
     #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda    
   )  # Colocar la leyenda abajo
 seq_plot2_pam_om2_m
-ggsave("_figs/clusterspam_om22_m_mod.png",seq_plot2_pam_om2_m, width = 8.5, height = 5.5, dpi=1000)
+ggsave("_figs/clusterspam_om22_m_mod.png",seq_plot2_pam_om2_m, width = 11, height = 5.5, dpi=1000)
 
 
 table_data_pam_om2_m <- sprintf("%1.2f",pamRange_month_om$stats[1,])

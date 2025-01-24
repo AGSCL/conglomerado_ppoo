@@ -869,9 +869,7 @@ knitr::kable(tabla_proporciones,
              align = "c")
 ```
 
-El conglomerado **5939** conserva el **88%** de las observaciones originales. Del **12% restante**, un **9%** proviene del conglomerado original **6035** y se dirige al **6036**, el cual está **100%** compuesto por este conglomerado. Por otro lado, un **3%** se transfiere al conglomerado **5935**, que está conformado en un **93%** por observaciones provenientes del conglomerado original. Finalmente, el **2%** restante se incorpora al conglomerado **5710**, que está compuesto en un **70%** por este mismo grupo.
-
-Otro conglomerado que actúa como donante es el **5939**, del cual se desprende un **11%** de sus observaciones. De este porcentaje, un **9%** se transfiere al conglomerado **5710**, donde representa el **23%** de este último, y un **2%** se dirige al conglomerado **5935**, representando el **6%** de dicho grupo.
+Una comparación con las agrupaciones de la solución de 4 conglomerados identifica que el conglomerado 6035, Un trimestre, TSM(4) conserva el 91% de sus observaciones originales. yendo un 4% a representar el 100% de las observaciones del conglomerado 6036: TSM, 1 año después, otras causas(7), el 3% se desprende al conglomerado 5935: TSM, 6 meses después, TSM(2) y el 2% restante se incorpora al conglomerado 5710, que está compuesto en un 70% por este mismo grupo. Por otra parte, el conglomerado 5939: Un semestre, TSM(3) conserva el 88%  de sus observaciones originales. Del porcentaje restante, un 9% se transfiere al conglomerado 5710, donde representa el 23% de este último, y un 2% se dirige al conglomerado 5935, representando el 6% de dicho grupo.
 
 Vemos los diagnósticos que vienen después de aquellos cluster con más de un ingreso.
 
@@ -1117,8 +1115,8 @@ Vemos los gráficos de las trayectorias
 #| paged.print: true
 #| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
 #| results: "hold"
-#| fig-width: 11
-#| fig-height: 5.5
+#| fig-width: 12
+#| fig-height: 8
 #| fig-dpi: 600
 #| label: 12plot-cluster-grafico-trayectorias
 
@@ -1135,7 +1133,7 @@ sil_pam_om_clus7_q <- wcSilhouetteObs(as.dist(dist_quarter_om),
 
 seq_plot_pam_om7_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens, 
                                  group= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om7,
-                                 facet_ncol=3, facet_nrow=3, sortv=sil_pam_om_clus7_q) +
+                                 facet_ncol=2, facet_nrow=4, sortv=sil_pam_om_clus7_q) +
   theme(legend.position = "none")+
   labs(x="Trimestres", y="# IDs de usuarios")+
   #guides(fill = guide_legend(nrow = 1))+
@@ -1145,7 +1143,7 @@ seq_plot_pam_om7_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens,
     axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
     axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
     axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
-    strip.text = element_text(size = 10, margin = margin(b =-15, t=10)),
+    strip.text = element_text(size = 15, margin = margin(b =-15, t=10)),
     legend.text = element_text(size = 15),
     legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
     legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
@@ -1164,7 +1162,7 @@ seq_plot_pam_om7_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens,
                                                    "#FFFFFF","#808080","#000000"))
 seq_plot_pam_om7_q 
 
-ggsave(filename="_figs/clusters_pam_om7_q_mod.png", seq_plot_pam_om7_q,  width = 11, height = 5.5, dpi=1000)
+ggsave(filename="_figs/clusters_pam_om7_q_mod.png", seq_plot_pam_om7_q,  width = 12*.95, height = 8*.95, dpi=1000)
 ```
 
 ```{r }
@@ -1178,14 +1176,14 @@ ggsave(filename="_figs/clusters_pam_om7_q_mod.png", seq_plot_pam_om7_q,  width =
 #| paged.print: true
 #| fig.cap: "Trayectorias de hospitalización, frecuencia relativa de estados en un gráfico de barras apiladas por trimestre."
 #| results: "hold"
-#| fig-width: 9
-#| fig-height: 5.5
+#| fig-width: 12
+#| fig-height: 8
 #| fig-dpi: 600
 #| label: 11plot-cluster2-grafico-trayectorias2
 
 seq_plot2_pam_om7_q <- ggseqdplot(States_Wide.seq_quarter_t_prim_adm_cens, 
                                  group= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om7,
-                                 facet_ncol=3, facet_nrow=3) +
+                                 facet_ncol=2, facet_nrow=4) +
   theme(legend.position = "none")+  # Colocar la leyenda abajo
   labs(x="Trimestres", y="Frecuencia relativa de estados")+
   theme(
@@ -1194,14 +1192,14 @@ seq_plot2_pam_om7_q <- ggseqdplot(States_Wide.seq_quarter_t_prim_adm_cens,
     axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
     axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
     axis.title.y = element_text(size = 15, margin = margin(r = -5)),
-    strip.text = element_text(size = 11),
+    strip.text = element_text(size = 15),
     panel.spacing.y = unit(0.5, "lines"),
     strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
     strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
     #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda    
   )  # Colocar la leyenda abajo
 seq_plot2_pam_om7_q
-ggsave("_figs/clusterspam_om72_q_mod.png",seq_plot2_pam_om7_q, width = 8.5, height = 5.5, dpi=1000)
+ggsave("_figs/clusterspam_om72_q_mod.png",seq_plot2_pam_om7_q, width = 12, height = 8, dpi=1000)
 
 
 table_data_pam_om7_q <- sprintf("%1.2f",pamRange_quarter_om$stats[3,])

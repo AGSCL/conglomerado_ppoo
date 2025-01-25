@@ -1388,6 +1388,12 @@ km_data <- data.frame(
   strata = rep(c("6035, Un trimestre, al menos un TSM(2)","6025, Un trimestre, TUS(1)"), km_fit$strata)
 )
 
+biostat3::survRate(Surv(time = death_time,
+                        event = ifelse(death_time==60,0,1)) ~ clus_pam_om2, 
+                   data= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)  %>% 
+    dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
+
+
 # Crear el gráfico de Kaplan-Meier con ggplot2
 ggplot(km_data, aes(x = time, y = surv, color = strata)) +
   geom_step(size = 1.2) +  # Curvas de supervivencia
@@ -1815,6 +1821,29 @@ pairwise_chisq_gof_test(tab_clus_sexo_pam_om2_m[-1], p.adjust.method="holm")|>
 
 
 ##### 2.1.3.g. Comparación covariables- Edad
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| label: 21t-desc-min-edad
+
+dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
+    dplyr::filter(month == 0) %>%
+    dplyr::inner_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run","clus_pam_om2")], by="run") %>%
+    dplyr::group_by(clus_pam_om2) %>%
+    dplyr::summarise(mean_edad = mean(min_edad_anos),
+                     sd= sd(min_edad_anos),
+                     p50= quantile(min_edad_anos,.5),
+                     ci_lower = quantile(min_edad_anos, 0.25),
+                     ci_upper = quantile(min_edad_anos, 0.75)) |> 
+    #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
+    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2, col.names=c("Conglomerado", "Promedio", "Desv. Estándar", "Mediana", "p025", "p975"))
+```
+
 
 ```{r 21t-edad-plot}
 #| message: true

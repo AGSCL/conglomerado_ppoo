@@ -117,6 +117,7 @@ if(!require(cowplot)){install.packages("cowplot"); require(cowplot)}
 if(!require(DiagrammeR)){install.packages("DiagrammeR"); require(DiagrammeR)}
 if(!require(DiagrammeRsvg)){install.packages("DiagrammeRsvg"); require(DiagrammeRsvg)}
 if(!require(rsvg)){install.packages("rsvg"); require(rsvg)}
+if(!require(survminer)){install.packages("survminer"); require(survminer)}
 
 seq_mean_t_dos_grupos <- function(bd = NULL, group1, group2) {
   # Agrupar por ambas variables
@@ -1571,6 +1572,80 @@ pairwise.prop.test(t(tab_cl_mortalidad_pam_om7_q[,2:ncol(tab_cl_mortalidad_pam_o
 No se constata una asociación entre la pertenencia a un conglomerado y mortalidad.
 
 
+```{r 12l-comp-cov-mortalidad15}
+# Cargar las librerías necesarias
+library(survival)
+library(ggplot2)
+
+# Crear la variable de supervivencia
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$surv_obj_7c <- Surv(time = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$death_time,
+                 event = ifelse(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$death_time==20,0,1))
+
+# Realizar el análisis de Log-Rank (survdiff)
+surv_diff_7c <- survdiff(surv_obj_7c ~ clus_pam_om7,
+                      data = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens)
+
+# Mostrar los resultados del test
+print(surv_diff_7c)
+
+pairwise_survdiff(
+    formula = surv_obj_7c ~ clus_pam_om7,
+    data = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens,
+    p.adjust.method = "holm"
+)
+
+message("Sin siluetas negativas")
+surv_diff_7c_neg_sil <- survdiff(Surv(time = death_time,
+                 event = ifelse(death_time==20,0,1)) ~ clus_pam_om7,
+                      data = subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q))
+
+# Mostrar los resultados del test
+print(surv_diff_7c_neg_sil)
+
+pairwise_survdiff(
+    formula = Surv(time = death_time,
+                 event = ifelse(death_time==20,0,1)) ~ clus_pam_om7,
+    data = subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), rho=0,
+    p.adjust.method = "holm"
+)
+
+# Ajustar el modelo de Kaplan-Meier
+km_fit_7c <- survfit(surv_obj_7c ~ clus_pam_om7,
+                  data = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens)
+
+# Extraer los datos del modelo Kaplan-Meier para usar con ggplot
+km_data_7c <- data.frame(
+  time = km_fit_7c$time,
+  surv = km_fit_7c$surv,
+  upper = km_fit_7c$upper,
+  lower = km_fit_7c$lower,
+  strata = rep(c("6035, Un trimestre, TSM(6)", "6025, Un trimestre, TUS(5)", 
+"5939, Un semestre TSM(3)", "5989, Comorbilidad un trimestre(4)", 
+"6036, TSM, 1 año después, otras causas(7)", "5710, TSM, 1 año después, TSM(1)", 
+"5935, TSM, 6 meses después, TSM(2)"), km_fit_7c$strata)
+)
+
+biostat3::survRate(Surv(time = death_time,
+                 event = ifelse(death_time==20,0,1)) ~ clus_pam_om7, 
+                   data= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens)  %>% 
+  dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
+
+# Crear el gráfico de Kaplan-Meier con ggplot2
+ggplot(km_data_7c, aes(x = time, y = surv, color = strata)) +
+  geom_step(size = 1.2) +  # Curvas de supervivencia
+  #geom_ribbon(aes(ymin = lower, ymax = upper, fill = strata), alpha = 0.2, color = NA) +  # Intervalos de confianza
+  labs(
+    title = "Curvas de Kaplan-Meier",
+    x = "Tiempo (meses)",
+    y = "Probabilidad de Supervivencia",
+    color = "Grupo",
+    fill = "Grupo"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") 
+```
+
+
 ##### 1.2.3.c. Comparación covariables- no RM vs. RM
 
 ```{r 12n-comp-cov-RMnoRM}
@@ -1604,7 +1679,7 @@ with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !r
 table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om7,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base) %>% 
     data.frame() |>  
     dplyr::group_by(Var1) |> 
-    dplyr::mutate(perc= scales::percent(Freq/sum(Freq), accuracy=1)) |> 
+    dplyr::mutate(perc= scales::percent(Freq/sum(Freq), accuracy=.1)) |> 
     dplyr::ungroup() |> 
     dplyr::mutate(Freq= Freq)  |>
     dplyr::mutate(fp= paste0(Freq, " (", perc,")" )) |> 
@@ -1793,7 +1868,7 @@ dplyr::mutate(macrozona = dplyr::case_when(
 )) %>% 
   janitor::tabyl(macrozona, clus_pam_om7) 
 
-chisq_cramerv(tab_clus_macrozona_pam_om7_q[,-1])
+chisq_cramerv(dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[,-1])
 # $chisq_statistic
 # [1] "143.52"
 # 
@@ -1822,10 +1897,26 @@ dplyr::mutate(macrozona = dplyr::case_when(
 )) , table(macrozona, clus_pam_om7))
 )
 
-tab_clus_macrozona_pam_om7_q %>%
-  janitor::adorn_percentages("col") %>%
-  janitor::adorn_rounding(digits = 2) %>%
-  dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.0f%%)", tab_clus_macrozona_pam_om7_q[[cur_column()]], . * 100))) |> 
+fisher.test(
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)%>% 
+  dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
+                    by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") %>% 
+dplyr::mutate(macrozona = dplyr::case_when(
+  codigo_region %in% c(15, 1, 2, 3) ~ "Macrozona Norte",
+  codigo_region %in% c(4, 5)~ "Macrozona Centro",
+  codigo_region %in% c(6, 7, 16, 8) ~ "Macrozona Centro Sur",
+  codigo_region %in% c(9, 14, 10) ~ "Macrozona Sur",
+  codigo_region %in% c(11, 12) ~ "Macrozona Austral",
+  TRUE ~ "RM"  # En caso de que algún código no esté especificado
+)) , table(macrozona, clus_pam_om7)),simulate.p.value=T, B=1e5
+)
+
+tab_clus_macrozona_pam_om7_q %>% 
+  dplyr::filter(macrozona!="RM") |> 
+  janitor::adorn_percentages("col") %>% 
+  janitor::adorn_rounding(digits = 3) %>% 
+    dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.1f%%)", 
+  dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[[cur_column()]], . * 100))) |> 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. macrozona")
 ```
 
@@ -1845,14 +1936,14 @@ Los conglomerados 5989, Comorbilidad un trimestre (4) y 6036, TSM, 1 año despu�
 #| paged.print: true
 #| results: "hold"
 
-chisq.posthoc.test(tab_clus_macrozona_pam_om7_q[-1]) %>% 
+chisq.posthoc.test(dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[-1]) %>% 
   dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
   #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
   group_by(Dimension) %>%
   summarise(across(2:(ncol(.)-1),
                    ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")"))) %>%
   dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.)) %>% 
-  dplyr::mutate(Dimension= tab_clus_macrozona_pam_om7_q[1]) %>% 
+  dplyr::mutate(Dimension= dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[1]) %>% 
   knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Macrozona")
 ```
 </div>
@@ -1868,7 +1959,7 @@ chisq.posthoc.test(tab_clus_macrozona_pam_om7_q[-1]) %>%
 #| paged.print: true
 #| results: "hold"
 #| 
-pairwise_chisq_gof_test(tab_clus_macrozona_pam_om7_q[-1], p.adjust.method="holm")|> 
+pairwise_chisq_gof_test(dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[-1], p.adjust.method="holm")|>
   knitr::kable("markdown", caption="Dependencia categórica sol. 7 conglomerados, por pares de categorías en Macrozona (corrección Holm-Bonferroni)")
 
 #Groups sharing a letter are not significantlt different (alpha = 0.05)
@@ -1918,8 +2009,8 @@ chisq_cramerv(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_
 
 tab_clus_sexo_pam_om7_q%>% 
   janitor::adorn_percentages("col") %>% 
-  janitor::adorn_rounding(digits = 2) %>% 
-  dplyr::mutate(across(-glosa_sexo, ~sprintf("%d (%.0f%%)", tab_clus_sexo_pam_om7_q[[cur_column()]],.*100)))|> 
+  janitor::adorn_rounding(digits = 3) %>% 
+  dplyr::mutate(across(-glosa_sexo, ~sprintf("%d (%.1f%%)", tab_clus_sexo_pam_om7_q[[cur_column()]],.*100)))|> 
   #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. sexo")
 ```
@@ -1963,6 +2054,29 @@ Los conglomerados con mayor porcentaje de mujeres son 6035, Un trimestre, TSM(6)
 
 
 ##### 1.2.3.g. Comparación covariables- Edad
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| label: 12t-desc-min-edad
+
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
+    dplyr::filter(quarter == 0) %>%
+    dplyr::inner_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run","clus_pam_om7")], by="run") %>%
+    dplyr::group_by(clus_pam_om7) %>%
+    dplyr::summarise(mean_edad = mean(min_edad_anos),
+                     sd= sd(min_edad_anos),
+                     p50= quantile(min_edad_anos,.5),
+                     ci_lower = quantile(min_edad_anos, 0.25),
+                     ci_upper = quantile(min_edad_anos, 0.75)) |> 
+    #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
+    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2, col.names=c("Conglomerado", "Promedio", "Desv. Estándar", "Mediana", "p025", "p975"))
+```
+
 
 ```{r 12t-edad-plot}
 #| message: true
@@ -2099,7 +2213,7 @@ tab_clus_prev_pam_om7_q%>%
 tab_clus_prev_pam_om7_q%>% 
   janitor::adorn_percentages("col") %>% 
   janitor::adorn_rounding(digits = 3) %>% 
-  dplyr::mutate(across(-prev_benef_rec_post, ~sprintf("%d (%.0f%%)", tab_clus_prev_pam_om7_q[[cur_column()]],.*100)))|>
+  dplyr::mutate(across(-prev_benef_rec_post, ~sprintf("%d (%.1f%%)", tab_clus_prev_pam_om7_q[[cur_column()]],.*100)))|>
   #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. Beneficios")
 ```
@@ -2133,6 +2247,10 @@ chisq_cramerv(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_
 
 message("Fisher test para valores ASW negativos")
 fisher.test(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(prev_benef_rec_post, clus_pam_om7)), simulate=T, B=1e5)
+
+subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q) |> 
+    janitor::tabyl(prev_benef_rec_post, clus_pam_om7) |> 
+  janitor::chisq.test()
 
 chisq.posthoc.test(tab_clus_prev_pam_om7_q[,-1]) %>% 
     dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
@@ -2174,8 +2292,8 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
 
 tab_clus_compl_pam_om7_q%>% 
   janitor::adorn_percentages("col") %>% 
-  janitor::adorn_rounding(digits = 2) %>% 
-  dplyr::mutate(across(-nivel_de_complejidad, ~sprintf("%d (%.0f%%)", tab_clus_compl_pam_om7_q[[cur_column()]],.*100)))|>
+  janitor::adorn_rounding(digits = 3) %>% 
+  dplyr::mutate(across(-nivel_de_complejidad, ~sprintf("%d (%.1f%%)", tab_clus_compl_pam_om7_q[[cur_column()]],.*100)))|>
   #dplyr::mutate_at(2:ncol(.), ~scales::percent(as.numeric(.), accuracy=.1)) %>% 
   knitr::kable(caption="Tabla de contingencia, Niv. de complejidad (proporción por columna)")
 ```

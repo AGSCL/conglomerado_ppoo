@@ -1444,8 +1444,17 @@ Vemos las categorías de clasificación de PPOO según autopercepción (en MINSA
 chisq.test(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om7))
 #X-squared = 5.5844, df = 6, p-value = 0.4713
 
+chisq_cramerv(
+table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om7)
+)
+
 message("Descartando valores negativos en sil width")
 chisq.test(
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om7))
+)
+
+
+chisq_cramerv(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om7))
 )
 ```
@@ -1470,13 +1479,34 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
     janitor::tabyl(factor_inclusivo_real_hist_mas_autperc_bin,clus_pam_om7) %>%
     janitor::chisq.test()
 #X-squared = 4.0105, df = 3, p-value = 0.2603
-#
+
+chisq_cramerv(
+with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, table(pueblo_originario_01, clus_pam_om7))
+)
 #
 message("Descartando valores negativos en sil width")
 chisq.test(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(pueblo_originario_01 , clus_pam_om7))
 )
+
+chisq_cramerv(
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(pueblo_originario_01, clus_pam_om7))
+)
 ```
+
+
+
+```{r 12i-comp-cov-ppoo5}
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>% 
+    janitor::tabyl(pueblo_originario_01,clus_pam_om7)%>% 
+  janitor::adorn_percentages("col") %>% 
+  janitor::adorn_rounding(digits = 3) %>% 
+  dplyr::mutate(across(-pueblo_originario_01, ~sprintf("%d (%.1f%%)", janitor::tabyl(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens,pueblo_originario_01,clus_pam_om7)[[cur_column()]],.*100)))|>
+  #dplyr::mutate_at(2:ncol(.), ~scales::percent(as.numeric(.), accuracy=.1)) %>% 
+  knitr::kable(caption="Tabla de contingencia, PPOO (proporción por columna)")
+```
+
 
 Tampoco se observa asociación alguna. Hicimos una prueba post-hoc usando Bonferroni
 
@@ -1527,12 +1557,23 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
               janitor::fisher.test(simulate.p.value=T, B=1e5)
 #p-value = 0.04477
 
+chisq_cramerv(
+with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens%>% 
+             dplyr::mutate(death_time_rec=ifelse(death_time==20,0,1)), table(death_time_rec , clus_pam_om7))
+)
+
+
 message("Descartando valores negativos en sil width")
 chisq_cramerv(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)%>% 
              dplyr::mutate(death_time_rec=ifelse(death_time==20,0,1)), table(death_time_rec , clus_pam_om7))
 )
 
+
+subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q) %>% 
+             dplyr::mutate(death_time_rec=ifelse(death_time==20,0,1)) %>% 
+             janitor::tabyl(death_time_rec,clus_pam_om7) %>% 
+              janitor::fisher.test(simulate.p.value=T, B=1e5)
 #_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 ##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 tab_cl_mortalidad_pam_om7_q<- 
@@ -1629,6 +1670,14 @@ biostat3::survRate(Surv(time = death_time,
                  event = ifelse(death_time==20,0,1)) ~ clus_pam_om7, 
                    data= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens)  %>% 
   dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
+
+biostat3::survRate(Surv(time = death_time,
+                        event = ifelse(death_time==20,0,1)) ~ clus1, 
+                   data= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |> dplyr::mutate(clus1= ifelse(grepl("6035",clus_pam_om7),"1","0")))  %>% 
+    dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
+
+cat("Diferencia multiplicativa entre cluster TSM 1 trimestre y el resto")
+epitools::rateratio.midp(c(30, 40,  32954.86, 86874.07))
 
 # Crear el gráfico de Kaplan-Meier con ggplot2
 ggplot(km_data_7c, aes(x = time, y = surv, color = strata)) +
@@ -1870,17 +1919,18 @@ dplyr::mutate(macrozona = dplyr::case_when(
 
 chisq_cramerv(dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[,-1])
 # $chisq_statistic
-# [1] "143.52"
+# [1] "100.60"
 # 
 # $chisq_df
 # df 
-# 30 
+# 24 
 # 
 # $chisq_p_value
 # [1] "<0.001"
 # 
 # $cramers_v
-# [1] "0.07"
+# [1] "0.09"
+
 
 message("Descartando valores negativos en sil width")
 chisq_cramerv(
@@ -1894,8 +1944,21 @@ dplyr::mutate(macrozona = dplyr::case_when(
   codigo_region %in% c(9, 14, 10) ~ "Macrozona Sur",
   codigo_region %in% c(11, 12) ~ "Macrozona Austral",
   TRUE ~ "RM"  # En caso de que algún código no esté especificado
-)) , table(macrozona, clus_pam_om7))
+)) |> dplyr::filter(macrozona!="RM"), table(macrozona, clus_pam_om7))
 )
+# $chisq_statistic
+# [1] "108.21"
+# 
+# $chisq_df
+# df 
+# 24 
+# 
+# $chisq_p_value
+# [1] "<0.001"
+# 
+# $cramers_v
+# [1] "0.09"
+
 
 fisher.test(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)%>% 
@@ -1908,7 +1971,7 @@ dplyr::mutate(macrozona = dplyr::case_when(
   codigo_region %in% c(9, 14, 10) ~ "Macrozona Sur",
   codigo_region %in% c(11, 12) ~ "Macrozona Austral",
   TRUE ~ "RM"  # En caso de que algún código no esté especificado
-)) , table(macrozona, clus_pam_om7)),simulate.p.value=T, B=1e5
+)) |> dplyr::filter(macrozona!="RM"), table(macrozona, clus_pam_om7)),simulate.p.value=T, B=1e5
 )
 
 tab_clus_macrozona_pam_om7_q %>% 

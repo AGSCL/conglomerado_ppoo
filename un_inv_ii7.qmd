@@ -1393,6 +1393,7 @@ biostat3::survRate(Surv(time = death_time,
                    data= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)  %>% 
     dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
 
+epitools::rateratio.midp(c(14 , 56,  41524.93 , 317961.85))
 
 # Crear el gráfico de Kaplan-Meier con ggplot2
 ggplot(km_data, aes(x = time, y = surv, color = strata)) +
@@ -1659,7 +1660,7 @@ dplyr::mutate(macrozona = dplyr::case_when(
 )) %>% 
   janitor::tabyl(macrozona, clus_pam_om2) 
 
-chisq_cramerv(tab_clus_macrozona_pam_om2_m[,-1])
+chisq_cramerv(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[,-1])
 # $chisq_statistic
 # [1] "100.16"
 # 
@@ -1688,11 +1689,10 @@ dplyr::mutate(macrozona = dplyr::case_when(
   TRUE ~ "RM"  # En caso de que algún código no esté especificado
 )) , table(macrozona, clus_pam_om2))
 )
-
-tab_clus_macrozona_pam_om2_m %>%
+dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM") %>%
   janitor::adorn_percentages("col") %>%
-  janitor::adorn_rounding(digits = 2) %>%
-  dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.0f%%)", tab_clus_macrozona_pam_om2_m[[cur_column()]], . * 100))) |> 
+  janitor::adorn_rounding(digits = 3) %>%
+  dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.1f%%)", dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[[cur_column()]], . * 100))) |> 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. macrozona")
 ```
 
@@ -1712,14 +1712,14 @@ El conglomerado 6025, Un trimestre, TUS (1) concentra un porcentaje reducido en 
 #| paged.print: true
 #| results: "hold"
 
-chisq.posthoc.test(tab_clus_macrozona_pam_om2_m[-1]) %>% 
+chisq.posthoc.test(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[-1]) %>% 
   dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3)) %>% 
   #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")%>%
   group_by(Dimension) %>%
   summarise(across(2:(ncol(.)-1),
                    ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")"))) %>%
   dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.)) %>% 
-  dplyr::mutate(Dimension= tab_clus_macrozona_pam_om2_m[1]) %>% 
+  dplyr::mutate(Dimension= dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[1]) %>% 
   knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Macrozona")
 ```
 </div>
@@ -1735,7 +1735,7 @@ chisq.posthoc.test(tab_clus_macrozona_pam_om2_m[-1]) %>%
 #| paged.print: true
 #| results: "hold"
 #| 
-pairwise_chisq_gof_test(tab_clus_macrozona_pam_om2_m[-1], p.adjust.method="holm")|> 
+pairwise_chisq_gof_test(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[-1], p.adjust.method="holm")|>
   knitr::kable("markdown", caption="Dependencia categórica sol. 2 conglomerados (mensual), por pares de categorías en Macrozona (corrección Holm-Bonferroni)")
 
 #Groups sharing a letter are not significantlt different (alpha = 0.05)
@@ -1780,8 +1780,8 @@ chisq_cramerv(with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wi
 
 tab_clus_sexo_pam_om2_m%>% 
   janitor::adorn_percentages("col") %>% 
-  janitor::adorn_rounding(digits = 2) %>% 
-  dplyr::mutate(across(-glosa_sexo, ~sprintf("%d (%.0f%%)", tab_clus_sexo_pam_om2_m[[cur_column()]],.*100)))|> 
+  janitor::adorn_rounding(digits = 3) %>% 
+  dplyr::mutate(across(-glosa_sexo, ~sprintf("%d (%.1f%%)", tab_clus_sexo_pam_om2_m[[cur_column()]],.*100)))|> 
   #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. sexo")
 ```
@@ -1841,7 +1841,7 @@ dt_ing_calendar_month_t_desde_primera_adm_dedup %>%
                      ci_lower = quantile(min_edad_anos, 0.25),
                      ci_upper = quantile(min_edad_anos, 0.75)) |> 
     #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
-    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2, col.names=c("Conglomerado", "Promedio", "Desv. Estándar", "Mediana", "p025", "p975"))
+    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=3, col.names=c("Conglomerado", "Promedio", "Desv. Estándar", "Mediana", "p025", "p975"))
 ```
 
 

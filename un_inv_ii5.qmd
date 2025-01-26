@@ -2946,6 +2946,14 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$surv_obj_4c <- 
 surv_diff_4c <- survdiff(surv_obj_4c ~ clus_pam_om4,
                       data = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens)
 
+biostat3::survRate(Surv(time = death_time,
+                        event = ifelse(death_time==20,0,1)) ~ clus1, 
+                   data= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |> dplyr::mutate(clus1= ifelse(grepl("6035",clus_pam_om4),"1","0")))  %>% 
+    dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
+
+cat("Diferencia multiplicativa entre cluster TSM 1 trimestre y el resto")
+epitools::rateratio.midp(c(25, 45, 24701.92, 95127.01))
+
 # Mostrar los resultados del test
 print(surv_diff_4c)
 

@@ -1422,7 +1422,7 @@ Observamos que aquellos en el conglomerado que se encuentra ingresada por trasto
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
   dplyr::count(clus_pam_om7, factor_inclusivo_real_hist_mas_autperc) %>%
   dplyr::group_by(clus_pam_om7) %>%
-  dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n)),")")) %>%
+  dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n), accuracy=.1),")")) %>%
   dplyr::select(-n) %>%
   tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc, values_from = n_prop, values_fill = "0")%>% 
   knitr::kable("markdown", col.names=c("Conglomerados","No se identifica/no pertenece", "No se identifica/hay reconocimiento", "Se identifica/hay reconocimeinto"), caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO")
@@ -1448,7 +1448,7 @@ chisq_cramerv(
 table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om7)
 )
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq.test(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om7))
 )
@@ -1472,6 +1472,17 @@ Ahora lo hacemos con la versión binarizada
 #| eval: true
 #| paged.print: true
 #| results: "hold"
+
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
+    dplyr::count(clus_pam_om7, factor_inclusivo_real_hist_mas_autperc_bin) %>%
+    dplyr::group_by(clus_pam_om7) %>%
+    dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n), accuracy=0.1),")")) %>%
+    dplyr::select(-n) %>%
+    tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc_bin, values_from = n_prop, values_fill = "0")  %>%  #rio::export("clipboard")
+  knitr::kable("markdown", caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO / Binario")
+
+
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc_bin<- ifelse(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc=="00",0,1)
 
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>% 
@@ -1481,16 +1492,16 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
 #X-squared = 4.0105, df = 3, p-value = 0.2603
 
 chisq_cramerv(
-with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, table(pueblo_originario_01, clus_pam_om7))
+with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, table(factor_inclusivo_real_hist_mas_autperc_bin, clus_pam_om7))
 )
 #
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq.test(
-with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(pueblo_originario_01 , clus_pam_om7))
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(factor_inclusivo_real_hist_mas_autperc_bin , clus_pam_om7))
 )
 
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(pueblo_originario_01, clus_pam_om7))
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(factor_inclusivo_real_hist_mas_autperc_bin, clus_pam_om7))
 )
 ```
 
@@ -1499,10 +1510,10 @@ with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !r
 ```{r 12i-comp-cov-ppoo5}
 
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>% 
-    janitor::tabyl(pueblo_originario_01,clus_pam_om7)%>% 
+    janitor::tabyl(factor_inclusivo_real_hist_mas_autperc_bin,clus_pam_om7)%>% 
   janitor::adorn_percentages("col") %>% 
   janitor::adorn_rounding(digits = 3) %>% 
-  dplyr::mutate(across(-pueblo_originario_01, ~sprintf("%d (%.1f%%)", janitor::tabyl(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens,pueblo_originario_01,clus_pam_om7)[[cur_column()]],.*100)))|>
+  dplyr::mutate(across(-factor_inclusivo_real_hist_mas_autperc_bin, ~sprintf("%d (%.1f%%)", janitor::tabyl(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens,factor_inclusivo_real_hist_mas_autperc_bin,clus_pam_om7)[[cur_column()]],.*100)))|>
   #dplyr::mutate_at(2:ncol(.), ~scales::percent(as.numeric(.), accuracy=.1)) %>% 
   knitr::kable(caption="Tabla de contingencia, PPOO (proporción por columna)")
 ```
@@ -1563,7 +1574,7 @@ with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens%>%
 )
 
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)%>% 
              dplyr::mutate(death_time_rec=ifelse(death_time==20,0,1)), table(death_time_rec , clus_pam_om7))
@@ -1635,7 +1646,7 @@ pairwise_survdiff(
     p.adjust.method = "holm"
 )
 
-message("Sin siluetas negativas")
+cat("Sin siluetas negativas")
 surv_diff_7c_neg_sil <- survdiff(Surv(time = death_time,
                  event = ifelse(death_time==20,0,1)) ~ clus_pam_om7,
                       data = subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q))
@@ -1719,7 +1730,7 @@ chisq_cramerv(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_
 # $cramers_v
 # [1] "0.08"
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(codigo_region_rec_base , clus_pam_om7))
 )
@@ -1883,7 +1894,7 @@ chisq_cramerv(tab_clus_reg_pam_om7_q[,-1])
 janitor::fisher.test(tab_clus_reg_pam_om7_q, simulate.p.value=T, B=1e5)
 #p-value = 1e-05
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)%>% 
     dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") , table(codigo_region , clus_pam_om7))
@@ -1932,7 +1943,7 @@ chisq_cramerv(dplyr::filter(tab_clus_macrozona_pam_om7_q,macrozona!="RM")[,-1])
 # [1] "0.09"
 
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(
 with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)%>% 
   dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
@@ -2066,7 +2077,7 @@ chisq_cramerv(tab_clus_sexo_pam_om7_q[,-1])
 # $cramers_v
 # [1] "0.21"
 #  
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(glosa_sexo, clus_pam_om7))
 )
 
@@ -2136,8 +2147,15 @@ dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
                      p50= quantile(min_edad_anos,.5),
                      ci_lower = quantile(min_edad_anos, 0.25),
                      ci_upper = quantile(min_edad_anos, 0.75)) |> 
+      dplyr::mutate(
+    edad_ingreso = sprintf(
+      "%.2f (%.2f ± %.2f); %.0f [%.0f, %.0f]",
+      mean_edad, mean_edad, sd, p50, ci_lower, ci_upper
+    )
+  ) %>%
+  dplyr::select(clus_pam_om7, edad_ingreso) |> 
     #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) %>% 
-    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2, col.names=c("Conglomerado", "Promedio", "Desv. Estándar", "Mediana", "p025", "p975"))
+    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2, col.names=c("Conglomerado", "Promedio Desv. Estándar Mediana p025 p975"))
 ```
 
 
@@ -2171,9 +2189,22 @@ ggplot(aes(x = clus_pam_om7, y = mean_edad)) +
        x = "Conglomerado",
        y = "Edad promedio") +
   theme_minimal()+
-  coord_flip()
+  coord_flip()+
+    theme(
+    axis.text.y = element_text(size = 17*.7, face = "bold"),#,margin = margin(l = 7)),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 17*.7, face = "bold"),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 16*.7, face = "bold"),#,margin = margin(t = -15)),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 16*.7, face = "bold"),          # Tamaño del título del eje Y
+    plot.title = NULL,  # Tamaño y estilo del título del gráfico
+    legend.title = element_text(size = 17*.7, face = "bold"),          # Tamaño del título de la leyenda
+    legend.spacing.y = unit(1.2, "lines"),
+    legend.box.spacing = unit(0.5, "lines"),      # Controla el espacio entre la leyenda y el gráfico
+    legend.margin = margin(5, 5, 5, 5),  
+    legend.key.height = unit(1, "cm"),  
+    legend.text = element_text(size = 15*.7, face = "bold")            # Tamaño del texto de la leyenda
+  ) 
 
-ggsave("_figs/edad_minima_por_cluster_pam_om7_q.png", dpi=600)
+ggsave("_figs/edad_minima_por_cluster_pam_om7_q.png", width=8, height=5, dpi=600)
 ```
 
 ```{r 12u-anova-edad}
@@ -2203,7 +2234,7 @@ with(dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
 print(anova_clus_pam_om7_q)
 
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 with(dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
     dplyr::filter(quarter == 0) %>%
     dplyr::inner_join(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)[,c("run","clus_pam_om7")], by="run"), 
@@ -2237,7 +2268,7 @@ rstatix::games_howell_test(min_edad_anos ~ clus_pam_om7,
   knitr::kable("markdown", col.names=c("Conglomerado1","Conglomerado2", "Estimación"), caption="Post-hoc, conglomerado vs. Promedio días de tratamiento")
 
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 sens_min_anios_clus_pam_om7_q<-
 rstatix::games_howell_test(min_edad_anos ~ clus_pam_om7,data = dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
     dplyr::filter(quarter == 0) %>%
@@ -2305,10 +2336,10 @@ chisq_cramerv(tab_clus_prev_pam_om7_q[,-1])
 # $cramers_v
 # [1] "0.04"
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(prev_benef_rec_post, clus_pam_om7)))
 
-message("Fisher test para valores ASW negativos")
+cat("Fisher test para valores ASW negativos")
 fisher.test(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q), table(prev_benef_rec_post, clus_pam_om7)), simulate=T, B=1e5)
 
 subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q) |> 
@@ -2392,7 +2423,7 @@ chisq_cramerv(tab_clus_compl_pam_om7_q[,-1])
 # $cramers_v
 # [1] "0.07"
 
-message("Descartando valores negativos en sil width")
+cat("Descartando valores negativos en sil width")
 chisq_cramerv(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q) %>% 
   dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
   by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first"), table(nivel_de_complejidad, clus_pam_om7)))
@@ -2530,9 +2561,9 @@ ggsave("_figs/asociaciones_pam_om7_q.png", width=8.8*.8, height=5*.8, dpi=1000)
 # Información de la sesión
 
 ```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
-message(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
-message(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
-message(paste0("Editor context: ", getwd()))
+cat(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
+cat(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
+cat(paste0("Editor context: ", getwd()))
 
 save.image("avance250117_2.RData")
 ```

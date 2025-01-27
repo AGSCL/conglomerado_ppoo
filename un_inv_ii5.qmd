@@ -3424,9 +3424,22 @@ ggplot(aes(x = clus_pam_om4, y = mean_edad)) +
        x = "Conglomerado",
        y = "Edad promedio") +
   theme_minimal()+
-  coord_flip()
+  coord_flip()+
+    theme(
+    axis.text.y = element_text(size = 17*.7, face = "bold"),#,margin = margin(l = 7)),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 17*.7, face = "bold"),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 16*.7, face = "bold"),#,margin = margin(t = -15)),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 16*.7, face = "bold"),          # Tamaño del título del eje Y
+    plot.title = NULL,  # Tamaño y estilo del título del gráfico
+    legend.title = element_text(size = 17*.7, face = "bold"),          # Tamaño del título de la leyenda
+    legend.spacing.y = unit(1.2, "lines"),
+    legend.box.spacing = unit(0.5, "lines"),      # Controla el espacio entre la leyenda y el gráfico
+    legend.margin = margin(5, 5, 5, 5),  
+    legend.key.height = unit(1, "cm"),  
+    legend.text = element_text(size = 15*.7, face = "bold")            # Tamaño del texto de la leyenda
+  ) 
 
-ggsave("_figs/edad_minima_por_cluster_pam_om4_q.png", dpi=600)
+ggsave("_figs/edad_minima_por_cluster_pam_om4_q.png", width=8, height=5, dpi=600)
 ```
 
 ```{r 11u-anova-edad}

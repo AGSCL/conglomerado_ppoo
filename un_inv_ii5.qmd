@@ -996,7 +996,7 @@ dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time_rec<- ifelse(!is.na(dt
                      dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time)
 
 psych::describe(dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time_rec) %>% 
-  knitr::kable("html")
+  knitr::kable("html", digits=2)
 ```
 
 Ahora por mes
@@ -1013,7 +1013,7 @@ dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec<- ifelse(!is.na(dt_d
                      dt_df_filled_month_t_desde_primera_adm_expand$cens_time)
 
 psych::describe(dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec) %>% 
-  knitr::kable("html")
+  knitr::kable("html", digits=2)
 ```
 
 ## 0.c. Compilación de todos CQI's
@@ -1061,6 +1061,150 @@ svg_code <- export_svg(graph)
 writeLines(svg_code, "_figs/diagrama_hierarquia.svg")
 svg_code <- export_svg(graph)
 rsvg_png(charToRaw(svg_code), file = "_figs/diagrama_hierarquia.png")
+```
+
+
+
+```{r desc-post}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+cat("Número de ttos.")
+df_filled %>% 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    summarise(n=n()) |> pull(n) |> 
+    summary()
+
+cat("Edad mínima al primer ingreso entre 2018-2021")
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
+    dplyr::filter(quarter == 0) %>%
+    dplyr::inner_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run","clus_pam_om4")], by="run") %>%
+    dplyr::summarise(mean_edad = mean(min_edad_anos),
+                     sd= sd(min_edad_anos),
+                     p50= quantile(min_edad_anos,.5),
+                     ci_lower = quantile(min_edad_anos, 0.25),
+                     ci_upper = quantile(min_edad_anos, 0.75)) 
+
+cat("Porcentaje de mujeres")
+scales::percent(round(prop.table(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$glosa_sexo)),2)[2])
+
+cat("Días en tratamiento")
+df_filled %>% 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) %>% 
+    dplyr::select(run, days_elapsed) %>% 
+    pull(days_elapsed) |> 
+    summary()
+
+cat("Diagnósticos")
+diag_todos<-
+    df_filled %>% 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    #dplyr::filter(row_number() != 1) %>%  # Elimina la primera observación de cada run
+    dplyr::mutate(
+        all_diags = paste(na.omit(c(diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11)), collapse = ", ")
+    ) %>%
+    dplyr::summarise(
+        all_diags = first(all_diags),
+        fecha_egreso_rec_fmt = first(fecha_egreso_rec_fmt),
+        estab_homo = first(estab_homo)
+    ) %>%
+    dplyr::ungroup() %>% 
+    dplyr::pull(all_diags) %>%  # Extraer la columna all_diags como vector
+    strsplit(split = ", ") %>%  # Separar cada diagnóstico por comas
+    unlist()
+
+diag_todos_first_tr<-
+    df_filled %>% 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    dplyr::filter(row_number() == 1) %>%  # me quedo con la primera observación de cada run
+    dplyr::mutate(
+        all_diags = paste(na.omit(c(diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11)), collapse = ", ")
+    ) %>%
+    dplyr::summarise(
+        all_diags = first(all_diags),
+        fecha_egreso_rec_fmt = first(fecha_egreso_rec_fmt),
+        estab_homo = first(estab_homo)
+    ) %>%
+    dplyr::ungroup() %>% 
+    dplyr::pull(all_diags) %>%  # Extraer la columna all_diags como vector
+    strsplit(split = ", ") %>%  # Separar cada diagnóstico por comas
+    unlist()
+arrange(data.frame(table(diag_todos_first_tr)),-Freq) |> 
+    dplyr::filter(grepl("F19",diag_todos_first_tr)) |> pull(Freq) |> sum()
+invisible("315 en el primer tratamiento...")
+
+cat("Total")
+length(diag_todos)
+
+# diag_todos Freq
+# 1       F192  394
+# 2       F191  104
+# 3       F199   90
+# 4       F193   38
+# 5       F195   25
+# 6       F190   21
+# 7       F198   13
+# 8       F197    2
+# 9       F196    1
+
+cat("Número de casos F19 y porcentaje")
+arrange(data.frame(table(diag_todos)),-Freq) |> 
+    dplyr::filter(grepl("F19",diag_todos)) |> pull(Freq) |> sum()
+#688
+scales::percent(688/19664)
+
+head(arrange(data.frame(table(diag_todos)), -Freq) |> dplyr::mutate(perc=scales::percent(Freq/sum(Freq), accuracy=.01)),20) |> 
+  knitr::kable("markdown", caption="Diagnósticos más frecuentes, código CIE-10, detalle y frecuencia")
+# **F329 (n=990)** – *Episodio depresivo no especificado.*  
+# Se refiere a un cuadro depresivo cuyos síntomas no cumplen criterios completos para especificar la gravedad o características particulares.
+# **F322 (n=845)** – *Episodio depresivo grave sin síntomas psicóticos.*  
+# Episodio depresivo intenso que no presenta alucinaciones ni ideas delirantes, pero con afectación significativa del funcionamiento.
+# **F609 (n=770)** – *Trastorno de la personalidad sin especificar.*  
+# Diagnóstico que incluye rasgos de personalidad patológicos que no se ajustan a categorías específicas conocidas.
+# **F603 (n=550)** – *Trastorno de la personalidad emocionalmente inestable (tipo límite).*  
+# También llamado “trastorno límite de la personalidad”, caracterizado por inestabilidad emocional, relaciones interpersonales conflictivas y conducta impulsiva.
+# **F432 (n=491)** – *Trastornos de adaptación.*  
+# Reacciones emocionales y/o conductuales que surgen como respuesta a un cambio o factor estresante identificable, dificultando la adaptación normal.
+# **F209 (n=433)** – *Esquizofrenia no especificada.*  
+# Forma de esquizofrenia en la que no se pueden determinar subtipos (paranoide, catatónica, etc.) o faltan detalles para clasificarlos.
+# **F192 (n=394)** – *Síndrome de dependencia por uso de múltiples drogas.*  
+# Dependencia y uso problemático de diversas sustancias psicoactivas, con patrones de consumo repetitivo y dificultades para el control.
+# **F319 (n=369)** – *Trastorno bipolar no especificado.*  
+# Forma de trastorno bipolar con episodios de alteración del estado de ánimo, donde faltan datos para clasificar un subtipo específico.
+# **Z915 (n=360)** – *Antecedentes personales de autolesiones.*  
+# Historia previa de conducta autolesiva o intento de suicidio, utilizada para codificar factores influyentes en el estado de salud actual.
+# **F200 (n=292)** – *Esquizofrenia paranoide.*  
+# Subtipo de esquizofrenia caracterizado principalmente por la presencia de delirios y alucinaciones de tipo paranoide.
+# **F29X (n=232)** – *Psicosis no orgánica no especificada.*  
+# Trastorno psicótico sin evidencia de causa orgánica, cuyos rasgos no son suficientes para un diagnóstico más preciso.
+# **F323 (n=230)** – *Episodio depresivo grave con síntomas psicóticos.*  
+# Episodio depresivo intenso que incluye delirios, alucinaciones u otras manifestaciones psicóticas.
+# **F121 (n=200)** – *Uso perjudicial de cannabis.*  
+# Consumo de cannabis que causa un deterioro en el funcionamiento personal o social, sin llegar al síndrome de dependencia.
+# **F101 (n=187)** – *Uso perjudicial de alcohol.*  
+# Patrón de consumo de alcohol que provoca daño a la salud física o mental, sin cumplir criterios de dependencia.
+# **F419 (n=176)** – *Trastorno de ansiedad no especificado.*  
+# Ansiedad significativa y persistente que no se encuadra en categorías específicas (p.ej. fobias, pánico, etc.).
+# **F142 (n=164)** – *Síndrome de dependencia de cocaína.*  
+# Presencia de dependencia a la cocaína, con anhelo intenso y dificultad para controlar o interrumpir el consumo.
+# **F321 (n=163)** – *Episodio depresivo moderado.*  
+# Estado depresivo con síntomas clínicamente relevantes, pero de gravedad intermedia entre leve y grave.
+# **F102 (n=157)** – *Síndrome de dependencia de alcohol.*  
+# Patrón de dependencia caracterizado por la necesidad imperiosa de beber y dificultad para controlar el consumo.
+# **F239 (n=148)** – *Trastorno psicótico agudo y transitorio no especificado.*  
+# Cuadro psicótico de inicio relativamente rápido, sin causa orgánica clara, que no se ajusta a otros subtipos definidos.
+# **F171 (n=142)** – *Uso perjudicial de tabaco.*  
+# Consumo de tabaco que genera consecuencias físicas o mentales negativas, sin cumplir criterios de dependencia.
 ```
 
 
@@ -2311,6 +2455,7 @@ length(diag_pam_om4_5939)
 # F239 (n=14) - Trastorno psicótico agudo y transitorio no especificado  
 # F449 (n=14) - Trastorno de ansiedad fóbica no especificado  
 # 
+#
 ```
 
 Entre quienes se encuentren en un semestre en el sistema por TSM y presentan un segundo episodio, de las 20 condiciones más frecuentes, al menos el 50% se caracteriza por episodios depresivos no especificado (F329), trastornos de la personalidad tipo límite (F603), otros trastornos específicos de la personalidad (F609) y episodios depresivos graves sin síntomas psicóticos (F322) y esquizofrenia no especificada (F209).

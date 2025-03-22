@@ -16,10 +16,15 @@ if(!require(gridExtra)){install.packages("gridExtra"); require(gridExtra)}
 if(!require(Tmisc)){install.packages("Tmisc"); require(Tmisc)}
 if(!require(factoextra)){install.packages("factoextra"); require(factoextra)}
 if(!require(pbapply)){install.packages("pbapply"); require(pbapply)}
+if(!require(progressr)){install.packages("progressr"); require(progressr)}
+
 
 interactive()
 library(pbapply)
-pboptions(type = "timer") # o "txt" o "timer" según el soporte de tu terminal
+pboptions(type = "txt") # o "txt" o "timer" según el soporte de tu terminal
+
+library(progressr)
+handlers("txtprogressbar")  # Barra textual compatible con notebooks
 
 #elegir repositorio
 if(Sys.info()["sysname"]=="Windows"){

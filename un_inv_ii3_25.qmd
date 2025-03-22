@@ -1,0 +1,3242 @@
+---
+title: "Paso 3- Trayectorias de hospitalización y mortalidad con foco en condiciones vinculadas a trastornos de salud mental y consumo de sustancias posterior a un primer ingreso por alguno de estos trastornos, en usuarios/as jóvenes y adultos emergentes de población general y pertenecientes a pueblos originarios, 2018-2021, Chile (actualización)"
+description: |
+  Distintas secuencias: Trimestral y Mensual, con y sin censura; Seleccionar algoritmos para generar las matrices de agrupación, ver opciones de algoritmos de agrupamiento (jerárquico o por medoids); ver un rango de opciones de distinta cantidad de conglomerados.
+date-format: "D [d]e MMM, YYYY"
+lang: es
+date: last-modified
+author: "Andrés González Santa Cruz"
+format: 
+  html:
+    css: [_lib/styles.scss]
+    code-fold: true
+    embed-resources: true
+    fig-cap-location: top
+lightbox: auto
+toc: true
+toc-depth: 5
+toc-location: left
+toc-float: true
+---
+
+```{css}
+#| echo: false
+.caption {
+  margin: auto;
+  text-align: center;
+}
+```
+
+# Configurar
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+
+if(Sys.info()["sysname"]=="Windows"){
+ folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
+                       "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
+                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
+} else {folder_path <- getwd()}
+load(paste0(folder_path,"20240902_25.RData"))
+```
+
+
+
+# Paquetes estadísticos
+
+```{r}
+#| class-output: center-table
+#| message: false
+#| include: true
+#| warning: false
+
+#elegir repositorio
+if(Sys.info()["sysname"]=="Windows"){
+  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+}
+options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
+
+#borrar caché
+#system("fc-cache -f -v")
+
+if(!require(pacman)){install.packages("pacman");require(pacman)}
+
+pacman::p_unlock(lib.loc = .libPaths()) #para no tener problemas reinstalando paquetes
+
+if(Sys.info()["sysname"]=="Windows"){
+if (getRversion() != "4.4.1") { stop("Requiere versión de R 4.4.1. Actual: ", getRversion()) }
+}
+
+if(!require(kableExtra)){install.packages("kableExtra");require(kableExtra)}
+if(!require(tidyverse)){install.packages("tidyverse");require(tidyverse)}
+if(!require(cluster)){install.packages("cluster"); require(cluster)}
+if(!require(WeightedCluster)){install.packages("WeightedCluster"); require(WeightedCluster)}
+if(!require(devtools)){install.packages("devtools"); require(devtools)}
+if(!require(TraMineR)){install.packages("TraMineR"); require(TraMineR)}
+if(!require(TraMineRextras)){install.packages("TraMineRextras"); require(TraMineRextras)}
+if(!require(NbClust)){install.packages("NbClust"); require(NbClust)}
+if(!require(haven)){install.packages("haven"); require(haven)}
+if(!require(ggseqplot)){install.packages("ggseqplot"); require(ggseqplot)}
+if(!require(gridExtra)){install.packages("gridExtra"); require(gridExtra)}
+if(!require(Tmisc)){install.packages("Tmisc"); require(Tmisc)}
+if(!require(factoextra)){install.packages("factoextra"); require(factoextra)}
+#remotes::install_version("htmltools", "0.5.2")
+
+#pacman job kableExtra tidyverse cluster WeightedCluster devtools TraMineR TraMineRextras NbClust haven ggseqplot gridExtra Tmisc factoextra reticulate  withr rmarkdown quarto
+
+options(knitr.kable.NA = '')
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- ifelse(difftime(Sys.time(), now)>(60^2),difftime(Sys.time(), now)/(60^2),difftime(Sys.time(), now)/(60^1))
+      # return a character string to show the time
+      x<-ifelse(difftime(Sys.time(), now)>(60^2),paste("Tiempo que demora esta sección:", round(res,1), "horas"),paste("Tiempo que demora esta sección:", round(res,1), "minutos"))
+      paste('<div class="message">', gsub('##', '\n', x),'</div>', sep = '\n')
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+format_cells <- function(df, rows ,cols, value = c("italics", "bold", "strikethrough")){
+  
+  # select the correct markup
+  # one * for italics, two ** for bold
+  map <- setNames(c("*", "**", "~~"), c("italics", "bold", "strikethrough"))
+  markup <- map[value]  
+  
+  for (r in rows){
+    for(c in cols){
+      
+      # Make sure values are not factors
+      df[[c]] <- as.character( df[[c]])
+      
+      # Update formatting
+      df[r, c] <- ifelse(nchar(df[r, c])==0,"",paste0(markup, gsub(" ", "", df[r, c]), markup))
+    }
+  }
+  
+  return(df)
+}
+#To produce line breaks in messages and warnings
+knitr::knit_hooks$set(
+  error = function(x, options) {
+    paste('\n\n<div class="alert alert-danger">',
+          gsub('##', '\n', gsub('^##\ Error', '**Error**', x)),
+          '</div>', sep = '\n')
+  },
+  warning = function(x, options) {
+    paste('\n\n<div class="alert alert-warning">',
+          gsub('##', '\n', gsub('^##\ Warning:', '**Warning**', x)),
+          '</div>', sep = '\n')
+  },
+  message = function(x, options) {
+    paste('<div class="message">',
+          gsub('##', '\n', x),
+          '</div>', sep = '\n')
+  }
+)
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_
+invisible("Function to format CreateTableOne into a database")
+
+as.data.frame.TableOne <- function(x, ...) {capture.output(print(x,
+                                                                 showAllLevels = TRUE, varLabels = T,...) -> x)
+  y <- as.data.frame(x)
+  y$characteristic <- dplyr::na_if(rownames(x), "")
+  y <- y |>
+    fill(characteristic, .direction = "down") |>
+    dplyr::select(characteristic, everything())
+  rownames(y) <- NULL
+  y}
+#_#_#_#_#_#_#_#_#_#_#_#_#_
+# Austin, P. C. (2009). The Relative Ability of Different Propensity 
+# Score Methods to Balance Measured Covariates Between 
+# Treated and Untreated Subjects in Observational Studies. Medical 
+# Decision Making. https://doi.org/10.1177/0272989X09341755
+smd_bin <- function(x,y){
+  z <- x*(1-x)
+  t <- y*(1-y)
+  k <- sum(z,t)
+  l <- k/2
+  
+  return((x-y)/sqrt(l))
+  
+}
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+
+#duración en cada estado
+seq_mean_t<- function(bd=NULL, group= group){
+  resultados<- by(bd, group, seqmeant)
+  
+  do.call(rbind, lapply(names(resultados), function(name) {
+    data.frame(factor_inclusivo = name, resultados[[name]])
+  }))
+}
+
+
+seqtrate_t<- function(bd=NULL, group= group){
+    # Utilizar la función 'by' para calcular las tasas agrupadas por 'glosa_sexo'
+    resultados <- by(bd, 
+                     group, 
+                     seqtrate)
+    
+    # Convertir los resultados en un data frame en formato largo
+    resultados_long <- do.call(rbind, lapply(names(resultados), function(sexo) {
+      df <- as.data.frame(resultados[[sexo]])
+      df$from <- rownames(df)
+      df$glosa_sexo <- sexo
+      df
+    }))
+    
+    # Usar tidyr para convertir a formato largo
+    library(tidyr)
+    resultados_long <- pivot_longer(resultados_long, 
+                                    cols = -c(from, glosa_sexo), 
+                                    names_to = "to", 
+                                    values_to = "rate")
+    
+    # Mostrar el data frame final
+    print(resultados_long)
+}
+
+
+seqcount_t<- function(bd=NULL, group= group){
+    # Utilizar la función 'by' para calcular las tasas agrupadas por 'glosa_sexo'
+  resultados <- by(bd, 
+                   group, 
+                   function(x) seqtrate(x, count = TRUE))
+    
+    # Convertir los resultados en un data frame en formato largo
+    resultados_long <- do.call(rbind, lapply(names(resultados), function(sexo) {
+      df <- as.data.frame(resultados[[sexo]])
+      df$from <- rownames(df)
+      df$glosa_sexo <- sexo
+      df
+    }))
+    
+    # Usar tidyr para convertir a formato largo
+    library(tidyr)
+    resultados_long <- pivot_longer(resultados_long, 
+                                    cols = -c(from, glosa_sexo), 
+                                    names_to = "to", 
+                                    values_to = "count")
+    
+    # Mostrar el data frame final
+    print(resultados_long)
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+
+if(.Platform$OS.type == "windows") withAutoprint({
+  memory.size()
+  memory.size(TRUE)
+  memory.limit()
+})
+if(Sys.info()["sysname"]=="Windows"){memory.limit(size=56000)}
+```
+
+
+Agregamos un estado de mortalidad para distinguirlo de otros tipos de censura. Por mientras, lo dejaré en otra base.
+
+```{r corr-sec-muerte}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens_d <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens_d <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens
+
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens_d <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens_d |>
+    dplyr::mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens_d <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens_d |>
+    dplyr::mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+
+invisible("Se eliminan 2 casos que no tienen otra cosa que ausente")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2<-
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2 |> 
+  dplyr::filter(`0`!="aus")
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens<-
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |> 
+  dplyr::filter(`0`!="aus")
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4<-
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4 |> 
+  dplyr::filter(`0`!="aus")  
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens<-
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens |> 
+  dplyr::filter(`0`!="aus")  
+
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2 |> 
+  dplyr::filter(`0`!="aus")
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens |> 
+  dplyr::filter(`0`!="aus")
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4 |> 
+  dplyr::filter(`0`!="aus")  
+
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens<-
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens |> 
+  dplyr::filter(`0`!="aus")  
+
+invisible("Para mantener la base de datos anterior")
+casos_prob<- c("ef1193767a2df73d6fdb1dd59d35edce262a9031d9ca5b012a11d088081b746e", 
+     "bd0c2f8dcc5209831487342eda88d0b0461c98150911e36b64b4055a846a3631")
+invisible("de 6,626 se reduce en 6.626 ya que ya habían sido descartado. Responden a la base 2024")
+```
+
+# 0. Generar un análisis de secuencias
+
+Primero creamos un alfabeto de estados discretos (secuencias). Luego, generamos las secuencias.
+
+```{r gen-sec}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+
+#Pre-agosto
+#    # state_alphabet <- c("coc", "mar", "oh", "psu", "cp",  
+#    #                     "cp_psu","psy", "aus", "otro", "cens")  
+#    # 
+#    # # Create a vector that allows for more helpful labels if applicable 
+#    # state_labels <- c("Cocaína", "Marihuana", "Alcohol", 
+#    #                   "Policonsumo", "Comorbilidad", "Comorbilidad\ny policonsumo", 
+#    #                   "Morbilidad\npsiquiátrica", "Ausente", "Otras causas","Censurado")
+
+#2024-08-09: modificaron los estados del alfabeto
+state_alphabet <- c("sus", "cp", "psi", "aus", "otro", "cens")  
+
+# Create a vector that allows for more helpful labels if applicable 
+state_labels <- c("Consumo\nde sustancias", "Comorbilidad", "Morbilidad\npsiquiátrica", "Ausente", "Otras causas","Censurado")
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+invisible("Generar las trayectorias: WHY")
+
+States_Wide.seq_quarter_t_prim_adm <- seqdef(
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2)):dim(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2)[[2]],#61 para month                    # Columns containing the sequences
+  alphabet = state_alphabet[-length(state_alphabet)],
+  labels = state_labels[-length(state_labels)],
+  start=0,  #Define el punto de inicio de la secuencia. Esto puede ser útil para visualizar mejor la secuencia.
+  # left="aus", # Define el estado que se utilizará para la porción izquierda de la secuencia cuando hay datos faltantes al principio.
+  #right="cens", # Define el estado que se utilizará para la porción derecha de la secuencia cuando hay datos faltantes al final.
+  # gaps="aus", # Define el estado que se utilizará para representar las brechas (gaps) dentro de la secuencia.
+  # missing="aus", 
+  # void="aus", 
+  xtstep = 4,  cpal=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                       "#FFFFFF","#808080"))#,"#000000")) 
+
+States_Wide.seq_quarter_t_prim_adm_cens <- seqdef(
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2)):dim(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2)[[2]],#61 para month                    # Columns containing the sequences
+  alphabet = state_alphabet,
+  labels = state_labels,
+  start=0,  
+  right="cens",
+  xtstep = 4,  cpal=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                       "#FFFFFF","#808080","#000000")) #"#000000", 
+
+States_Wide.seq_month_t_prim_adm <- seqdef(
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2)):dim(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2)[[2]],
+  alphabet = state_alphabet[-length(state_alphabet)],
+  labels = state_labels[-length(state_labels)],
+  start=0,
+xtstep = 4,  cpal=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                       "#FFFFFF","#808080"))#,"#000000")) 
+
+States_Wide.seq_month_t_prim_adm_cens <- seqdef(
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)):dim(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)[[2]],#2:61,#61 para month                    # Columns containing the sequences
+  alphabet = state_alphabet,
+  labels = state_labels,
+  start=0, 
+  right="cens", 
+  xtstep = 4,  cpal=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                       "#FFFFFF","#808080","#000000")) #"#000000", 
+
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+invisible("Generar las trayectorias: WHERE")
+
+#state_alphabetRM <- c("noRM", "RM", "aus", "otro", "cens")  
+state_alphabetRM <- c("noRM", "RM", "aus", "cens")  
+
+# Create a vector that allows for more helpful labels if applicable 
+#state_labelsRM <- c("Otra\nregión", "Región\nMetropolitana","Ausente", "Otras causas","Censurado")
+state_labelsRM <- c("Otra\nregión", "Región\nMetropolitana","Ausente", "Censurado")
+
+
+States_Wide.seq_quarter_t_prim_adm_RM <- seqdef(
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4)):dim(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4)[[2]],#61 para month                    # Columns containing the sequences
+  alphabet = state_alphabetRM[-length(state_alphabetRM)],
+  labels = state_labelsRM[-length(state_labelsRM)],
+  start=0,
+  xtstep = 4,  cpal=c("#2A4B5F", "#F5E3A1",
+                       "#FFFFFF"))#,"#808080","#000000")) 
+
+States_Wide.seq_quarter_t_prim_adm_RM_cens <- seqdef(
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2)):dim(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2)[[2]],#61 para month                    # Columns containing the sequences
+  alphabet = state_alphabetRM,
+  labels = state_labelsRM,
+  start=0,  
+  right="cens",
+  xtstep = 4,  cpal=c("#2A4B5F", "#F5E3A1",
+                       "#FFFFFF","#000000")) #"#808080",
+
+States_Wide.seq_month_t_prim_adm_RM <- seqdef(
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4)):dim(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4)[[2]],
+  alphabet = state_alphabetRM[-length(state_alphabetRM)],
+  labels = state_labelsRM[-length(state_labelsRM)],
+  start=0,
+  xtstep = 4,  cpal=c("#2A4B5F", "#F5E3A1",
+                       "#FFFFFF"))#,"#808080","#000000")) 
+
+States_Wide.seq_month_t_prim_adm_RM_cens <- seqdef(
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens, #States_Wide, # Select data   
+  var = match("0",names(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens)):dim(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens)[[2]],#2:61,#61 para month                    # Columns containing the sequences
+  alphabet = state_alphabetRM,
+  labels = state_labelsRM,
+  start=0, 
+  right="cens", 
+  xtstep = 4,  cpal=c("#2A4B5F", "#F5E3A1",
+                       "#FFFFFF","#000000")) #"#808080",
+```
+
+
+## 0.a. Descriptivos
+
+Visualizamos mediante Index plots (ordenados desde el inicio)
+
+### General
+
+::: {.panel-tabset}
+
+#### Diagnóstico- Trimestre
+
+```{r ind-plot-trimestre}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+gc()
+seqIplot(States_Wide.seq_quarter_t_prim_adm, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias", # Plot title
+         xlab = "Trimestres desde la primera admisión") 
+```
+
+#### Diagnóstico- Trimestre (c/censura)
+
+```{r ind-plot-trimestre-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+seqIplot(States_Wide.seq_quarter_t_prim_adm_cens, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias (con censura)", # Plot title
+         xlab = "Trimestres desde la primera admisión") 
+```
+
+#### Diagnóstico- Mes
+
+```{r ind-plot-mes}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seqIplot(States_Wide.seq_month_t_prim_adm, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias", # Plot title
+         xlab = "Meses desde la primera admisión") 
+```
+
+#### Diagnóstico- Mes (c/censura)
+
+```{r ind-plot-mes-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seqIplot(States_Wide.seq_month_t_prim_adm_cens, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias (con censura)", # Plot title
+         xlab = "Meses desde la primera admisión") 
+```
+
+#### Región- Trimestre
+
+```{r ind-plot-reg-trimestre}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seqIplot(States_Wide.seq_quarter_t_prim_adm_RM, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias", # Plot title
+         xlab = "Trimestres desde la primera admisión") 
+```
+
+#### Región- Trimestre (c/censura)
+
+```{r ind-plot-reg-trimestre-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seqIplot(States_Wide.seq_quarter_t_prim_adm_RM_cens, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias (con censura)", # Plot title
+         xlab = "Trimestres desde la primera admisión") 
+```
+
+#### Región- Mes
+
+```{r ind-plot-reg-mes}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seqIplot(States_Wide.seq_month_t_prim_adm_RM, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias", # Plot title
+         xlab = "Meses desde la primera admisión") 
+```
+
+#### Región- Mes (c/censura)
+
+```{r ind-plot-reg-mes-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seqIplot(States_Wide.seq_month_t_prim_adm_RM_cens, sortv = "from.start",   # Sequence object
+         with.legend = "right", # Display legend on right side of plot
+         cex.legend = 0.6,  # Change size of legend
+         main = "Gráfico de índice de secuencias (con censura)", # Plot title
+         xlab = "Meses desde la primera admisión") 
+
+# recorded_plot <- recordPlot() 
+# png("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/_figs/seqin_trim_inicio.png", height=6, width=8, res=500, units="in") 
+# recorded_plot
+# dev.off()
+```
+
+:::
+
+Vemos las secuencias más frecuentes
+
+```{r mas-frecuentes-diagnostico}
+seqtab(States_Wide.seq_quarter_t_prim_adm)->freqtab_trim
+seqtab(States_Wide.seq_quarter_t_prim_adm_cens)->freqtab_trim_cens
+seqtab(States_Wide.seq_month_t_prim_adm)->freqtab_mes
+seqtab(States_Wide.seq_month_t_prim_adm_cens)->freqtab_mes_cens
+
+rbind.data.frame(
+cbind.data.frame(marco= "Trimestral (s/censura)", data.table::as.data.table(attr(freqtab_trim,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
+cbind.data.frame(marco= "Trimestral (c/censura)", data.table::as.data.table(attr(freqtab_trim_cens,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
+cbind.data.frame(marco= "Mensual (s/censura)", data.table::as.data.table(attr(freqtab_mes,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
+cbind.data.frame(marco= "Mensual (c/censura)", data.table::as.data.table(attr(freqtab_mes_cens,"freq"), keep.rownames = "Secuencias (estado/frecuencia)"))
+) |> 
+  dplyr::mutate(Percent= scales::percent(Percent/100, accuracy=0.1)) |> 
+  {
+  #copiar_nombres2()
+    write.table(., file = paste0(getwd(),"secuencias_mas_frecuentes_25.csv"), dec=",", sep="\t")
+    knitr::kable(., size=10, format="html", caption="Secuencias más frecuentes") |> 
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
+    kableExtra::scroll_box(width = "100%", height = "375px")  
+  }
+```
+
+A partir de la tabla anterior, se confirma que más del 50% sólo tienen un evento hospitalario, liderando el por causas psiquiátricas (52%) seguido muy de lejos por un sólo ingreso por consumo de sustancias (8%) y comorbilidad (2%). Luego, un 2% tiene más de un evento psiquiátrico que habría durado más de un trimestre, presumiblemente, debido a su continuidad. Para la base con datos mensuales, un 44% corresponde a un mes en ingreso por causas psiquiátricas, un 7% por causas por consumo de sustancias y un 1% por comorbilidad. También se constata eventos compuestos de 2 meses en consulta psiquiátrica (6%) y hasta 3 (1%).
+
+
+```{r mas-frecuentes-region}
+seqtab(States_Wide.seq_quarter_t_prim_adm_RM)->freqtab_trim_reg
+seqtab(States_Wide.seq_quarter_t_prim_adm_RM_cens)->freqtab_trim_cens_reg
+seqtab(States_Wide.seq_month_t_prim_adm_RM)->freqtab_mes_reg
+seqtab(States_Wide.seq_month_t_prim_adm_RM_cens)->freqtab_mes_cens_reg
+
+rbind.data.frame(
+cbind.data.frame(marco= "Trimestral (s/censura)", data.table::as.data.table(attr(freqtab_trim_reg,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
+cbind.data.frame(marco= "Trimestral (c/censura)", data.table::as.data.table(attr(freqtab_trim_cens_reg,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
+cbind.data.frame(marco= "Mensual (s/censura)", data.table::as.data.table(attr(freqtab_mes_reg,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
+cbind.data.frame(marco= "Mensual (c/censura)", data.table::as.data.table(attr(freqtab_mes_cens_reg,"freq"), keep.rownames = "Secuencias (estado/frecuencia)"))
+) |> 
+  dplyr::mutate(Percent= scales::percent(Percent/100, accuracy=0.1)) |> 
+  {
+  #copiar_nombres2()
+    write.table(., file = paste0(getwd(),"secuencias_mas_frecuentes_reg_25.csv"), dec=",", sep="\t")
+    knitr::kable(., size=10, format="html", caption="Secuencias más frecuentes (region)") |> 
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
+    kableExtra::scroll_box(width = "100%", height = "375px")  
+  }
+```
+
+Para las secuencias regionales, se observa que una mayor parte de los ingresos corresponde a personas que no tienen su primer y único ingreso en la región metropolitana (34%), seguido por quienes sí lo tienen (28%). Posteriormente, se encuentran los que tienen un evento continuo presumiblemente fuera de la región metropolitana (2%) y en la región metropolitana (2%).
+
+
+Luego, vimos un tiempo promedio en cada estado.
+
+### Entropía
+
+La entropía transversal es una métrica de diversidad de estados observados en cada posición. Un valor de 0 significa que todos las observaciones están en un mismo estado y su valor es máximo cuando hay una misma proporción de casos que están en el mismo estado.
+
+
+::: {.panel-tabset}
+
+#### Diagnóstico-Trimestre
+
+```{r entropy-dg-quarter}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_quarter_t_prim_adm), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Trimestres", xtlab=1:21)
+```
+
+#### Diagnóstico-Trimestre (c/censura)
+
+```{r entropy-dg-quarter-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_quarter_t_prim_adm_cens), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Trimestres", xtlab=1:21)
+```
+
+#### Diagnóstico-Mes
+
+```{r entropy-dg-month}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_month_t_prim_adm), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Meses", xtlab=1:61)
+```
+
+
+#### Diagnóstico-Mes (c/censura)
+
+```{r entropy-dg-month-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_month_t_prim_adm_cens), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Meses", xtlab=1:61)
+```
+
+
+#### Región-Trimestre
+
+```{r entropy-rm-quarter}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_quarter_t_prim_adm_RM), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Trimestre", xtlab=1:21)
+```
+
+
+#### Región-Trimestre (c/censura)
+
+```{r entropy-rm-quarter-censura}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_quarter_t_prim_adm_RM_cens), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Trimestre", xtlab=1:21)
+```
+
+
+#### Región-Mes
+
+```{r entropy-rm-month}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_month_t_prim_adm_RM), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Meses", xtlab=1:61)
+```
+
+
+#### Región-Mes (c/censura)
+
+```{r entropy-rm-month-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Entropía de Shannon por tiempo de seguimiento"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+plot(seqstatd(States_Wide.seq_month_t_prim_adm_RM_cens), type="Ht", #main="Age-specific Shannon's Entropy", 
+     xlab= "Meses", xtlab=1:61)
+```
+
+:::
+
+En general todos parecen estar en el estado ausente, salvo en los modelos que incorporan censura al final del estudio, en donde aparecen como censurados.
+
+
+### Tiempo promedio en cada estado
+
+::: {.panel-tabset}
+
+#### Promedio-Diagnóstico-Trimestre-Sexo
+
+```{r tiempo-promedio-plot-trimestre-sexo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (trimestral)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+
+invisible("2024-09-02, sacar cosas")
+seq_mean_t(States_Wide.seq_quarter_t_prim_adm, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |>
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  coord_flip()+
+  labs(title = "Tiempo promedio en cada estado por sexo (Trimestral, s/censura)",
+       x = NULL,
+       y = NULL) +
+  theme(#axis.text.x = element_blank(),
+        #axis.text.y = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-RM-Trimestre-Sexo
+
+```{r tiempo-promedio-plot-trimestre-sexo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (trimestral)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+
+seq_mean_t(States_Wide.seq_quarter_t_prim_adm_RM, 
+            subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4, !run %in% casos_prob, glosa_sexo)) |>
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  coord_flip()+
+  labs(title = "Tiempo promedio en cada estado por sexo (Trimestral, s/censura)",
+       x = NULL,
+       y = NULL) +
+  theme(#axis.text.x = element_blank(),
+        #axis.text.y = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-Diagnóstico-Trimestre-Sexo (c/censura)
+
+```{r tiempo-promedio-plot-trimestre-sexo-ccensura}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (trimestral)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+seq_mean_t(States_Wide.seq_quarter_t_prim_adm_cens, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  coord_flip()+
+  labs(title = "Tiempo promedio en cada estado por sexo (Trimestral, c/censura)",
+       x = NULL,
+       y = NULL) +
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())  
+```
+
+#### Promedio-Diagnóstico-Trimestre-PPOO
+
+```{r tiempo-promedio-plot-trimestre-ppoo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (trimestral)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+seq_mean_t(States_Wide.seq_quarter_t_prim_adm, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc))|> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  labs(title = "Tiempo promedio en cada estado por estatus PPOO (Trimestral s/censura)",
+       x = NULL,
+       y = NULL) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-RM-Trimestre-PPOO
+
+```{r tiempo-promedio-plot-trimestre-ppoo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (trimestral)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+seq_mean_t(States_Wide.seq_quarter_t_prim_adm_RM, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  labs(title = "Tiempo promedio en cada estado por estatus PPOO (Trimestral s/censura)",
+       x = NULL,
+       y = NULL) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-Diagnóstico-Trimestre-PPOO (c/censura)
+
+```{r tiempo-promedio-plot-trimestre-ppoo-cccensura}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (trimestral)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| 
+seq_mean_t(States_Wide.seq_quarter_t_prim_adm_cens, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  labs(title = "Tiempo promedio en cada estado por estatus PPOO (Trimestral c/censura)",
+       x = NULL,
+       y = NULL) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+    geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+:::
+
+Ahora por mes 
+
+::: {.panel-tabset}
+
+#### Promedio-Diagnóstico-Mes-Sexo
+
+```{r tiempo-promedio-plot-mes-sexo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (mensual)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+seq_mean_t(States_Wide.seq_month_t_prim_adm, 
+           subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |>
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  coord_flip()+
+  labs(title = "Tiempo promedio en cada estado por sexo (Mensual, s/censura)",
+       x = NULL,
+       y = NULL) +
+  theme(#axis.text.x = element_blank(),
+        #axis.text.y = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-RM-Mes-Sexo
+
+```{r tiempo-promedio-plot-mes-sexo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (mensual)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+seq_mean_t(States_Wide.seq_month_t_prim_adm_RM, 
+           subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |>
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  coord_flip()+
+  labs(title = "Tiempo promedio en cada estado por sexo (Mensual, s/censura)",
+       x = NULL,
+       y = NULL) +
+  theme(#axis.text.x = element_blank(),
+        #axis.text.y = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+
+#### Promedio-Diagnóstico-Mes-Sexo (c/censura)
+
+```{r tiempo-promedio-plot-mes-sexo-ccensura}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (mensual)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seq_mean_t(States_Wide.seq_month_t_prim_adm_cens, 
+           subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, glosa_sexo)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  coord_flip()+
+  labs(title = "Tiempo promedio en cada estado por sexo (Mensual, c/censura)",
+       x = NULL,
+       y = NULL) +
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())  
+```
+
+#### Promedio-Diagnóstico-Mes-PPOO
+
+```{r tiempo-promedio-plot-mes-ppoo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (mensual)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seq_mean_t(States_Wide.seq_month_t_prim_adm, 
+           subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  labs(title = "Tiempo promedio en cada estado por estatus PPOO (Mensual s/censura)",
+       x = NULL,
+       y = NULL) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-RM-Mes-PPOO
+
+```{r tiempo-promedio-plot-mes-ppoo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (mensual)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+seq_mean_t(States_Wide.seq_month_t_prim_adm_RM, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  labs(title = "Tiempo promedio en cada estado por estatus PPOO (Mensual s/censura)",
+       x = NULL,
+       y = NULL) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+  geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+#### Promedio-Diagnóstico-Mes-PPOO (c/censura)
+
+```{r tiempo-promedio-plot-mes-ppoo-ccensura}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tiempo promedio en cada estado por distintas variables (mensual)"
+#| results: "hold"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+seq_mean_t(States_Wide.seq_month_t_prim_adm_cens, 
+           subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
+  data.table::as.data.table(keep.rowname=T) |> 
+  ggplot(aes(x=rn, fill= factor_inclusivo, y=Mean))+
+  geom_bar(width = 1, stat = "identity") +
+  theme_minimal() +
+  labs(title = "Tiempo promedio en cada estado por estatus PPOO (Mensual c/censura)",
+       x = NULL,
+       y = NULL) +
+  coord_flip()+
+  theme(#axis.text.x = element_blank(),
+    #axis.text.y = element_blank(),
+    panel.grid = element_blank()) +
+  scale_fill_brewer(palette = "Pastel1", labels=c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas")) +
+    geom_text(aes(label = round(Mean,1)), 
+            position = position_stack(vjust = 0.5), 
+            size = 2.5, # Ajusta el tamaño de la fuente aquí
+            color = "black", # Color del texto
+            family = "sans", # Puedes cambiar la fuente si lo deseas
+            background = element_rect(fill = "white", color = NA)) + # Fondo blanco
+  theme(legend.title = element_blank())
+```
+
+:::
+
+No se aprecian diferencias sustanciales por categoría. Tal vez, las mujeres se encuentran más tiempo en ingresos psiquiátricos y por otras causas, pero es una diferencia muy leve. Quienes no están en la Región Metropolitana tienen más tiempo en promedio en ingreso hospitalario para el caso de quienes tienen reconocimiento CONADI y se autoidentifican además de los que sólo tienen autoidentificación vs. las personas en la región metropolitana.
+
+
+## 0.b. Tasas de transición
+
+La probabilidad de cambiar en un posición de un estado a otro. Por defecto, las probabilidades se asumieron independientes de la posición, esto es, el mismo sin importar el punto de tiempo.
+
+### Trimestre 
+
+::: {.panel-tabset}
+
+#### Sin censura-Sexo
+
+```{r tasa-transicion-plot-trimestre-sexo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (trimestral)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+trim_tasa_sexo_cnt<-  
+seqcount_t(States_Wide.seq_quarter_t_prim_adm, 
+           group=subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+trim_tasa_sexo_rate<-  
+seqtrate_t(States_Wide.seq_quarter_t_prim_adm, 
+           group=subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+trim_tasa_sexo_rate |>   
+dplyr::left_join(trim_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Sin censura-Sexo-RM
+
+```{r tasa-transicion-plot-trimestre-sexo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (trimestral)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+trim_tasa_sexo_cnt_rm<-  
+seqcount_t(States_Wide.seq_quarter_t_prim_adm_RM, 
+           group= subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+trim_tasa_sexo_rate_rm<-  
+seqtrate_t(States_Wide.seq_quarter_t_prim_adm_RM, 
+           group= subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+trim_tasa_sexo_rate_rm |>   
+dplyr::left_join(trim_tasa_sexo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (s/censura)- RM",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Con censura-Sexo
+
+```{r tasa-transicion-plot-trimestre-sexo-ccens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (trimestral)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+trim_tasa_sexo_cnt_cens<-  
+seqcount_t(States_Wide.seq_quarter_t_prim_adm_cens, 
+           group= subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, glosa_sexo)) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+trim_tasa_sexo_rate_cens<-  
+seqtrate_t(States_Wide.seq_quarter_t_prim_adm_cens, 
+           group= subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, glosa_sexo)) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+trim_tasa_sexo_rate_cens |>   
+dplyr::left_join(trim_tasa_sexo_cnt_cens, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (c/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Sin censura-PPOO
+
+```{r tasa-transicion-plot-trimestre-ppoo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (trimestral)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+trim_tasa_ppoo_cnt<-  
+seqcount_t(States_Wide.seq_quarter_t_prim_adm, 
+           group=factor(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+trim_tasa_ppoo_rate<-  
+seqtrate_t(States_Wide.seq_quarter_t_prim_adm, 
+           group=factor(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+trim_tasa_ppoo_rate |>   
+dplyr::left_join(trim_tasa_ppoo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Sin censura-PPOO-RM
+
+```{r tasa-transicion-plot-trimestre-ppoo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (trimestral)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+trim_tasa_ppoo_cnt_rm<-  
+seqcount_t(States_Wide.seq_quarter_t_prim_adm_RM, 
+           group=factor(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+trim_tasa_ppoo_rate_rm<-  
+seqtrate_t(States_Wide.seq_quarter_t_prim_adm_RM, 
+           group=factor(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+trim_tasa_ppoo_rate_rm |>   
+dplyr::left_join(trim_tasa_ppoo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (s/censura) (RM)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Con censura-PPOO
+
+```{r tasa-transicion-plot-trimestre-ppoo-ccens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (trimestral)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+trim_tasa_ppoo_cnt_cens<-  
+seqcount_t(States_Wide.seq_quarter_t_prim_adm_cens, 
+           group=factor(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+trim_tasa_ppoo_rate_cens<-  
+seqtrate_t(States_Wide.seq_quarter_t_prim_adm_cens, 
+           group=factor(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+trim_tasa_ppoo_rate_cens |>   
+dplyr::left_join(trim_tasa_ppoo_cnt_cens, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Trimestre (c/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+:::
+
+Para ver los números detrás de las transiciones, calcular exp(x-1).
+
+- De los ingresos por otras causas, más hombres transitan a un nuevo ingreso por otras causas (16%, n=94 vs. 12%, n=148), más hombres se mantienen transitando desde comorbilidad a ingresos presentando comorbilidad nuevamente (14%, n=34 vs. 11%, n=12), pero más mujeres que ingresaron por sustancias reingresan al sistema de salud por algún motivo (16%, n=42 vs. 10%, n=54).
+- Aunque son pocos casos, personas con autoidentificación y reconocimiento (~30) que ingresaron por comorbilidad registran más transiciones a comorbilidad (14%, n=4) o ingreso con diagnóstico psiquiátrico (14%, n=4) vs. el resto.
+- Asimismo, personas con autoidentificación y reconocimiento y autoidentificación sin reconocimiento que ingresan por consumo de sustancias tienen más ingresos relativos (8%, n=7; 10% n=10) que sin autoidentificación ni reconocimiento (5% n=33).
+
+```{r , eval=F}
+trim_tasa_sexo_rate |> 
+    dplyr::left_join(trim_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to"))|> 
+    dplyr::rename("recuento"="count") |> 
+    dplyr::filter(from=="sus") |> 
+    dplyr::mutate(gr=ifelse(to=="aus",1,0)) |> 
+    dplyr::group_by(glosa_sexo,gr) |> 
+        summarise(rate=sum(rate),recuento=sum(recuento))
+
+trim_tasa_ppoo_rate |>   
+  dplyr::left_join(trim_tasa_ppoo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to"))|>
+  dplyr::rename("recuento"="count") |> 
+  dplyr::filter(from=="cp")
+  
+```
+
+
+### Mensual 
+
+::: {.panel-tabset}
+
+#### Sin censura-Sexo
+
+```{r tasa-transicion-plot-mes-sexo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (mensual)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+mes_tasa_sexo_cnt<-  
+seqcount_t(States_Wide.seq_month_t_prim_adm, 
+           group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$glosa_sexo) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+mes_tasa_sexo_rate<-  
+seqtrate_t(States_Wide.seq_month_t_prim_adm, 
+           group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$glosa_sexo) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+mes_tasa_sexo_rate |>   
+dplyr::left_join(mes_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Mensual (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+
+#### Sin censura-Sexo-RM
+
+```{r tasa-transicion-plot-mes-sexo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (mensual)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+mes_tasa_sexo_cnt_rm<-  
+seqcount_t(States_Wide.seq_month_t_prim_adm_RM, 
+           group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$glosa_sexo) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+mes_tasa_sexo_rate_rm<-  
+seqtrate_t(States_Wide.seq_month_t_prim_adm_RM, 
+           group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$glosa_sexo) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+mes_tasa_sexo_rate_rm |>   
+dplyr::left_join(mes_tasa_sexo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Mensual (s/censura) (RM)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Con censura-Sexo
+
+```{r tasa-transicion-plot-mes-sexo-ccens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (mensual)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+mes_tasa_sexo_cnt_cens<-  
+seqcount_t(States_Wide.seq_month_t_prim_adm_cens, 
+           group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$glosa_sexo) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+mes_tasa_sexo_rate_cens<-  
+seqtrate_t(States_Wide.seq_month_t_prim_adm_cens,
+           group=ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$glosa_sexo) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+mes_tasa_sexo_rate_cens |>   
+dplyr::left_join(mes_tasa_sexo_cnt_cens, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Mensual (c/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Sin censura-PPOO
+
+```{r tasa-transicion-plot-mes-ppoo}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (mensual)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+mes_tasa_ppoo_cnt<-  
+seqcount_t(States_Wide.seq_month_t_prim_adm, 
+           group=factor(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+mes_tasa_ppoo_rate<-  
+seqtrate_t(States_Wide.seq_month_t_prim_adm, 
+           group=factor(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+mes_tasa_ppoo_rate |>   
+dplyr::left_join(mes_tasa_ppoo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Mensual (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+
+#### Sin censura-PPOO-RM
+
+```{r tasa-transicion-plot-mes-ppoo-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (mensual)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+mes_tasa_ppoo_cnt_rm<-  
+seqcount_t(States_Wide.seq_month_t_prim_adm_RM, 
+           group=factor(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+mes_tasa_ppoo_rate_rm<-  
+seqtrate_t(States_Wide.seq_month_t_prim_adm_RM, 
+           group=factor(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+mes_tasa_ppoo_rate_rm |>   
+dplyr::left_join(mes_tasa_ppoo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Mensual (s/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+#### Con censura-PPOO
+
+```{r tasa-transicion-plot-mes-ppoo-ccens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Tasas de transición (mensual)"
+#| results: "hide" #para no mostrar las bases
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+mes_tasa_ppoo_cnt_cens<-  
+seqcount_t(States_Wide.seq_month_t_prim_adm_cens, 
+           group=factor(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(count>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .))) 
+
+mes_tasa_ppoo_rate_cens<-  
+seqtrate_t(States_Wide.seq_month_t_prim_adm_cens, 
+           group=factor(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc, labels= c("Sin\nautoidentificación\nni reconocimiento", "Autoidentificación\nsin reconocimiento", "Ambas"))) |> 
+  dplyr::filter(rate>0) |> 
+  dplyr::mutate(trans = paste0(from,"_", to)) |> 
+  dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))  
+
+
+
+mes_tasa_ppoo_rate_cens |>   
+dplyr::left_join(mes_tasa_ppoo_cnt_cens, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  ggplot(aes(x = from, y = to, fill = rate, size=log(recuento+1))) +
+  geom_tile() +
+  coord_flip()+
+  scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
+  labs(title = "Tasas de transición, Mensual (c/censura)",
+       x = "Desde",
+       y = "Hacia",
+       fill = "Rate") +
+  theme_minimal() +
+  facet_wrap(~glosa_sexo)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = sprintf("%1.2f", rate), size =log(recuento+1)*.5), color = "black")
+```
+
+:::
+
+Para ver los números detrás de las transiciones, calcular exp(x-1).
+
+- Más mujeres que ingresaron por sustancias reingresan al sistema de salud por dicho motivo (23%, n=73 vs. 12%, n=74).
+- Más hombres que ingresan con diagnósticos psiquiátricos transitan a un ingreso con un diagnóstico del mismo tipo (35%, n=1517 vs. 26%, n=1404). Asimismo, más hombres que ingresan por otros motivos también registran un ingreso posterior por otros motivos (25%, n=188 vs. 19%, n=303). Por último, hombres que ingresan por comorbilidad experimentan una transición a comorbilidad con mayor frecuencia (43%, n=148 vs. 29%, n=38).
+- Entre quienes ingresan por sustancias, quienes se autoidentifican y son reconocidos como pertenecientes a PPOO presentan menos transiciones al mismo estado (13%, n=13) vs. quienes se autoidentifican pero no son reconocidos (18% n=21) o que no se autoidentifican ni son reconocidos (15% n=113).
+- Quienes se autoidentifican pero no poseen reconocimiento de la CONADI y fueron ingresados con diagnóstico de comorbilidad, registran menos transiciones a un ingreso con comorbilidad (24%, n=8) que el resto (40%, n_ambas=17, n_ninguna= 161)
+- Mujeres tienen menos transiciones (~25% vs. ~33%) que hombres cuando vemos las transiciones de región.
+
+En resumen:
+- Se hace difícil distinguir entre PPOO por grados hasta el momento. Dejarlo para una reflexión posterior, para el análisis una vez teniendo los conglomerados.
+
+
+```{r , eval=F}
+trim_tasa_sexo_rate |> 
+    dplyr::left_join(trim_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to"))|> 
+    dplyr::rename("recuento"="count") |> 
+    dplyr::filter(from=="sus") |> 
+    dplyr::mutate(gr=ifelse(to=="aus",1,0)) |> 
+    dplyr::group_by(glosa_sexo,gr) |> 
+        summarise(rate=sum(rate),recuento=sum(recuento))
+
+trim_tasa_ppoo_rate |>   
+  dplyr::left_join(trim_tasa_ppoo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to"))|>
+  dplyr::rename("recuento"="count") |> 
+  dplyr::filter(from=="cp")
+#mes_tasa_ppoo_rate_cens  
+#mes_tasa_sexo_cnt_rm
+#
+#
+mes_tasa_sexo_rate |>   
+dplyr::left_join(mes_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo","to"="to")) |> 
+  dplyr::rename("recuento"="count") |> 
+  dplyr::filter(from=="sus")
+```
+
+
+# 1. Generamos matriz de sustituciones
+
+Generamos mediante los algoritmos de Optimal Matching (OM) y Longest Common Subsequence (LCS). Se calcularon los costos de substitución entre secuencias de estados en un análisis de secuencias. El método utilizado es el TRATE, que calcula los costos en base a las tasas de transición observadas. Por fines computacionales, se asumirán que los costos no varían con el tiempo. Es decir, se asume que el costo de transición entre dos estados es constante a lo largo del período de estudio.
+
+```{r sustitution-matrix}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| 
+costmatrix_quarter <- seqsubm(States_Wide.seq_quarter_t_prim_adm,  # Sequence object
+                      method = "TRATE",  # Method to determine costs
+                      time.varying = FALSE) # Does not allow the cost to vary over time)
+costmatrix_quarter_rm <- seqsubm(States_Wide.seq_quarter_t_prim_adm_RM,  # Sequence object
+                      method = "TRATE",  # Method to determine costs
+                      time.varying = FALSE) # Does not allow the cost to vary over time)
+costmatrix_quarter_cens <- seqsubm(States_Wide.seq_quarter_t_prim_adm_cens,  # Sequence object
+                      method = "TRATE",  # Method to determine costs
+                      time.varying = FALSE) # Does not allow the cost to vary over time)
+costmatrix_month <- seqsubm(States_Wide.seq_month_t_prim_adm,  # Sequence object
+                      method = "TRATE",  # Method to determine costs
+                      time.varying = FALSE) # Does not allow the cost to vary over time)
+costmatrix_month_rm <- seqsubm(States_Wide.seq_quarter_t_prim_adm_RM,  # Sequence object
+                      method = "TRATE",  # Method to determine costs
+                      time.varying = FALSE) # Does not allow the cost to vary over time)
+costmatrix_month_cens <- seqsubm(States_Wide.seq_month_t_prim_adm_cens,  # Sequence object
+                      method = "TRATE",  # Method to determine costs
+                      time.varying = FALSE) # Does not allow the cost to vary over time)
+                      
+```
+
+# 2. Análisis de cluster
+
+Generamos distintas soluciones con distintas cantidades de conglomerados, desde 2 a 15, utilizando los algoritmos de distancia OM y LCS (1), además de replicarlo tanto para secuencias trimestrales y mensuales (2) y con y sin censura (3).
+
+Primero calculamos una matriz de distancias utilizando el método de optimización de correspondencias (Optimal Matching, OM) y utilizando el método de la secuencia común más larga (Longest common subsequence, LCS). El primero tiene la ventaja de comparar secuencias de distinta duración, siendo bastante flexible, aunque puede implicar la distrorsión de los tiempos involucrados. Por otra parte, el segundo, al buscar la secuencia común más larga (independiente de estados intermedios), tiene la ventaja de no ser necesario definir costos de inserción o eliminación, no tener que ajustar muchos parámetros sujetos a decisiones arbitrarias, lo que hace más fácil de interpretar ya que se centra en las partes de secuencias que coinciden.Sin embargo,  esta simplificación pierde diferencias o similitudes más específicas, y no permite ajustar esos costos de las diferencias.
+
+
+```{r om-lcs}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+
+# ---- ** OPTIMAL MATCHING ----
+dist_quarter_om <- seqdist(States_Wide.seq_quarter_t_prim_adm,
+                   method = "OM",
+                   indel= 1.0, #Ignored with non OM metrics.
+                   sm = costmatrix_quarter)
+dist_quarter_om_rm <- seqdist(States_Wide.seq_quarter_t_prim_adm_RM,
+                   method = "OM",
+                   indel= 1.0, #Ignored with non OM metrics.
+                   sm = costmatrix_quarter_rm)
+dist_quarter_om_cens <- seqdist(States_Wide.seq_quarter_t_prim_adm_cens,
+                   method = "OM",
+                   indel= 1.0,#Ignored with non OM metrics.
+                   sm = costmatrix_quarter_cens)
+dist_month_om <- seqdist(States_Wide.seq_month_t_prim_adm,
+                   method = "OM",
+                   indel= 1.0,#Ignored with non OM metrics.
+                   sm = costmatrix_month)
+dist_month_om_rm <- seqdist(States_Wide.seq_month_t_prim_adm_RM,
+                   method = "OM",
+                   indel= 1.0,#Ignored with non OM metrics.
+                   sm = costmatrix_month_rm)
+dist_month_om_cens <- seqdist(States_Wide.seq_month_t_prim_adm_cens,
+                   method = "OM",
+                   indel= 1.0,#Ignored with non OM metrics.
+                   sm = costmatrix_month_cens)
+
+# ---- ** LCS" (Longest Common Subsequence). ----
+dist_quarter_lcs <- seqdist(States_Wide.seq_quarter_t_prim_adm,
+                      method = "LCS", #"HAM",
+                      sm = costmatrix_quarter)
+dist_quarter_lcs_rm <- seqdist(States_Wide.seq_quarter_t_prim_adm_RM,
+                      method = "LCS", #"HAM",
+                      sm = costmatrix_quarter_rm)
+dist_quarter_lcs_cens <- seqdist(States_Wide.seq_quarter_t_prim_adm_cens,
+                      method = "LCS", #"HAM",
+                      sm = costmatrix_quarter_cens)
+dist_month_lcs <- seqdist(States_Wide.seq_month_t_prim_adm,
+                      method = "LCS", #"HAM",
+                      sm = costmatrix_month)
+dist_month_lcs_rm <- seqdist(States_Wide.seq_month_t_prim_adm_RM,
+                      method = "LCS", #"HAM",
+                      sm = costmatrix_month_rm)
+dist_month_lcs_cens <- seqdist(States_Wide.seq_month_t_prim_adm_cens,
+                      method = "LCS", #"HAM",
+                      sm = costmatrix_month_cens)
+```
+
+
+## 2.a. Clúster jerárquico
+
+Se generó un análisis de clúster jerárquico mediante el método de agrupamiento (`Ward.D2`) minimiza la suma de las varianzas dentro de cada clúster.
+
+$$
+d(A, B) = \sqrt{ \frac{2|A||B|}{|A| + |B|} } \, \cdot ||c_A - c_B||
+$$
+donde:
+- $|A|$ y $|B|$ son los tamaños de los conglomerados
+- $x_i$ es un punto de datos en el conglomerado
+- $c_A$ es el centroide del conglomerado A
+- $c_B$ es el centroide del conglomerado B
+
+
+```{r hclust}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+
+om_dist_quarter <- hclust(as.dist(dist_quarter_om), method = "ward.D2")
+om_dist_quarter_rm <- hclust(as.dist(dist_quarter_om_rm), method = "ward.D2")
+
+lcs_dist_quarter <- hclust(as.dist(dist_quarter_lcs), method = "ward.D2")
+lcs_dist_quarter_rm <- hclust(as.dist(dist_quarter_lcs_rm), method = "ward.D2")
+
+om_dist_quarter_cens <- hclust(as.dist(dist_quarter_om_cens), method = "ward.D2")
+lcs_dist_quarter_cens <- hclust(as.dist(dist_quarter_lcs_cens), method = "ward.D2")
+
+om_dist_month <- hclust(as.dist(dist_month_om), method = "ward.D2")
+om_dist_month_rm <- hclust(as.dist(dist_month_om_rm), method = "ward.D2")
+
+lcs_dist_month <- hclust(as.dist(dist_month_lcs), method = "ward.D2")
+lcs_dist_month_rm <- hclust(as.dist(dist_month_lcs_rm), method = "ward.D2")
+
+om_dist_month_cens <- hclust(as.dist(dist_month_om_cens), method = "ward.D2")
+lcs_dist_month_cens <- hclust(as.dist(dist_month_lcs_cens), method = "ward.D2")
+```
+
+Se generan los dendogramas, que para mejor representación se restringe a un mínimo de de distancias (altura o dismilaridad) de 30. De manera que elementos que se encuentran separados por menos de 30 unidades en la matriz de dissimilaridad se considerará que pertenecen a una misma agrupación, lo que simplifica la visualización.
+
+### Trimestral
+
+::: {.panel-tabset}
+
+#### Dendograma OM- Ward (Corte a 30) s/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+plot(cut(as.dendrogram(om_dist_quarter), h = 30)$upper, 
+     main = NULL, 
+     ylab = "Distancia", xlab = "", cex = 0.5)
+# recorded_plot <- recordPlot() 
+# png("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/_figs/dendogram_hc_om_trimestral.png", height=6, width=8, res=200, units="in") 
+# recorded_plot
+# dev.off()
+
+```
+
+
+#### Dendograma OM- Ward (Corte a 30) s/censura -RM
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+plot(cut(as.dendrogram(om_dist_quarter_rm), h = 30)$upper, 
+     main = NULL, 
+     ylab = "Distancia", xlab = "", cex = 0.5)
+# recorded_plot <- recordPlot() 
+# png("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/_figs/dendogram_hc_om_trimestral.png", height=6, width=8, res=200, units="in") 
+# recorded_plot
+# dev.off()
+
+```
+
+
+#### Dendograma LCS- Ward (Corte a 30) s/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+plot(cut(as.dendrogram(lcs_dist_quarter), h = 30)$upper, 
+     main =NULL, 
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+
+#### Dendograma LCS- Ward (Corte a 30) s/censura -RM
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+plot(cut(as.dendrogram(lcs_dist_quarter_rm), h = 30)$upper, 
+     main =NULL, 
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+#### Dendograma OM- Ward (Corte a 30) c/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+plot(cut(as.dendrogram(om_dist_quarter_cens), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+#### Dendograma LCS- Ward (Corte a 30) c/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+plot(cut(as.dendrogram(lcs_dist_quarter_cens), h = 30)$upper, 
+     main = NULL, 
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+:::
+
+- Se puede observar que ambos algoritmos generan separaciones claras en 3 a 5 separaciones que serían más distinguibles. 
+- En el caso de la región metropolitana, se puede distinguir 2 a 8 conglomerados, aunque 3 son más distinguibles y 5 son razonablemente distinguibles.
+
+### Mensual
+
+::: {.panel-tabset}
+
+#### Dendograma OM- Ward (Corte a 30) s/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+plot(cut(as.dendrogram(om_dist_month), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.5)
+```
+
+
+#### Dendograma OM- Ward (Corte a 30) s/censura-RM
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+plot(cut(as.dendrogram(om_dist_month_rm), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.5)
+```
+
+#### Dendograma LCS- Ward (Corte a 30) s/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+plot(cut(as.dendrogram(lcs_dist_month), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+#### Dendograma LCS- Ward (Corte a 30) s/censura-RM
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+plot(cut(as.dendrogram(lcs_dist_month_rm), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+#### Dendograma OM- Ward (Corte a 30) c/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+plot(cut(as.dendrogram(om_dist_month_cens), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+#### Dendograma LCS- Ward (Corte a 30) c/censura
+
+```{r}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Dendogramas (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+plot(cut(as.dendrogram(lcs_dist_month_cens), h = 30)$upper, 
+     main = NULL,
+     ylab = "Distancia", xlab = "", cex = 0.2)
+```
+
+:::
+
+- Se repite un patrón similar, aunque en este caso 2 a 3 agrupaciones son más claramente distinguibles en ambos. También se constatan solcuiones de 5, cuando no hay censura, y de 7, cuando se incorpora.
+- Para RM, se distinguen de 3 a 5, y también pueden vislumbrarse soluciones de 7 u 8 aunque más cercano a un salto en términos de separaciones.
+
+
+### 2.a.1. Métricas de calidad
+
+Se ven rangos de 2 a 15 conglomerados y se comparan sus métricas de calidad.
+
+```{r clustrange}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+
+om_dist_quarter_c <- as.clustrange(om_dist_quarter, diss=as.dist(dist_quarter_om), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(om_dist_quarter_c, max.rank=14)
+om_dist_quarter_c_rm <- as.clustrange(om_dist_quarter_rm, diss=as.dist(dist_quarter_om_rm), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(om_dist_quarter_c_rm, max.rank=14)
+om_dist_quarter_cens_c <- as.clustrange(om_dist_quarter_cens, diss=as.dist(dist_quarter_om_cens), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(om_dist_quarter_cens_c, max.rank=14)
+om_dist_month_c <- as.clustrange(om_dist_month, diss=as.dist(dist_month_om), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(om_dist_quarter_c, max.rank=14)
+om_dist_month_c_rm <- as.clustrange(om_dist_month_rm, diss=as.dist(dist_month_om_rm), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(om_dist_month_c_rm, max.rank=14)
+om_dist_month_cens_c <- as.clustrange(om_dist_month_cens, diss=as.dist(dist_month_om_cens), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(om_dist_month_cens_c, max.rank=14)
+
+lcs_dist_quarter_c <- as.clustrange(lcs_dist_quarter, diss=as.dist(dist_quarter_lcs), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(lcs_dist_quarter_c, max.rank=14)
+lcs_dist_quarter_c_rm <- as.clustrange(lcs_dist_quarter_rm, diss=as.dist(dist_quarter_lcs_rm), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(lcs_dist_quarter_c_rm, max.rank=14)
+lcs_dist_quarter_cens_c <- as.clustrange(lcs_dist_quarter_cens, diss= as.dist(dist_quarter_lcs_cens), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(lcs_dist_quarter_cens_c, max.rank=14)
+lcs_dist_month_c <- as.clustrange(lcs_dist_month, diss=as.dist(dist_month_lcs), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(lcs_dist_quarter_c, max.rank=14)
+lcs_dist_month_c_rm <- as.clustrange(lcs_dist_month_rm, diss=as.dist(dist_month_lcs_rm), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(lcs_dist_month_c_rm, max.rank=14)
+lcs_dist_month_cens_c <- as.clustrange(lcs_dist_month_cens, diss=as.dist(dist_month_lcs_cens), kvals=2:15, ncluster=15) # this takes some time to run
+#summary(lcs_dist_month_cens_c, max.rank=14)
+```
+
+El average silhouette width `ASW` (Anchura de la Silueta Promedio) mide la coherencia de los elementos dentro de los clústeres. Se calcula como la diferencia entre la distancia promedio de un punto a todos los puntos en su clúster y la distancia mínima promedio a todos los puntos en cualquier otro clúster. Los valores oscilan entre -1 y 1, donde un valor cercano a 1 indica que el punto está bien agrupado, un valor cercano a 0 indica que el punto está en el borde del clúster y un valor negativo indica que el punto puede estar mal agrupado.
+
+El Hubert Gamma `HG` (estadística Gamma de Hubert) es un índice que mide la correlación entre la matriz de disimilitud original y la matriz de disimilitud generada a partir del dendrograma del clúster. Un valor alto de la estadística Gamma indica una buena correspondencia entre las dos matrices, lo que sugiere una estructura de clúster fuerte.
+
+El C de Hubert `HC` (Estadística C de Hubert) es similar a la estadística Gamma de Hubert, pero se centra en la evaluación de la calidad de un solo clúster en lugar de la estructura de clúster completa. Mide la proporción de pares de puntos que están en el mismo clúster en la partición verdadera y en la partición obtenida por el algoritmo de agrupamiento. Un valor alto indica una buena correspondencia entre las particiones.
+
+El point biserial correlation `PBC` (Correlación Biserial Puntual) es un índice que mide la correlación entre una variable continua y una variable binaria que indica la pertenencia a un clúster (0 o 1). En el contexto del análisis de clúster, se utiliza para evaluar la calidad de la separación entre clústeres. Un valor alto de PBC indica que los clústeres están bien separados, lo que sugiere una estructura de clúster fuerte.
+
+Visualizamos los índices de calidad estandarizados, ya sea en magnitudes brutas o estandarizadas (std).
+
+::: {.panel-tabset}
+
+#### Trimestral
+
+```{r fit-indices-plot-quarter}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(om_dist_quarter_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral")
+abline(v=5, col="#666666", lty="longdash", lwd = 2)
+abline(v=9, col="#666666", lty="longdash", lwd = 2)
+plot(om_dist_quarter_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (std)")
+abline(v=5, col="#666666", lty="longdash", lwd = 2)
+abline(v=9, col="#666666", lty="longdash", lwd = 2)
+#pamRange_month_lcs$stats |> data.frame() |> dplyr::select("ASW","HC", "HG", "PBC") |> knitr::kable("markdown")
+```
+
+- De 5 a 9 cluster parece haber un ajuste y parsimonia adecuados. Particular atención requieren las soluciones de 5 a 6 cluster.
+
+#### Trimestral (LCS)
+
+```{r fit-indices-plot-quarter-lcs}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(lcs_dist_quarter_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=9, col="#666666", lty="longdash", lwd = 2)
+abline(v=11, col="#666666", lty="longdash", lwd = 2)
+plot(lcs_dist_quarter_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=9, col="#666666", lty="longdash", lwd = 2)
+abline(v=11, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 2 conglomerados merece especial atención, junto con la de 9 conglomerados, para evitar simplificar. No obstante una solución de 11 conglomerados también obtiene métricas de calidad.
+
+#### Trimestral (c/ censura)
+
+```{r fit-indices-plot-quarter-om-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(om_dist_quarter_cens_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=9, col="#666666", lty="longdash", lwd = 2)
+abline(v=11, col="#666666", lty="longdash", lwd = 2)
+plot(om_dist_quarter_cens_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (std) (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=9, col="#666666", lty="longdash", lwd = 2)
+abline(v=11, col="#666666", lty="longdash", lwd = 2)
+```
+
+- Especial atención merece la solcuión de 2 conglomerados, seguido por la solución de 11. Por otra parte, una solución de 8-9 conglomerados también muestra un balance aunque entre simplicidad y complejidad, aunque los conglomerados no sean del todo distinguibles.
+
+#### Trimestral (LCS) (c/ censura)
+
+```{r fit-indices-plot-quarter-lcs-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(lcs_dist_quarter_cens_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+plot(lcs_dist_quarter_cens_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std) (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+```
+
+La solución de 2 cluster es la de mejor calidad.
+
+#### Trimestral-RM
+
+```{r fit-indices-plot-quarter-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(om_dist_quarter_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "OM Trimestral")
+abline(v=4, col="#666666", lty="longdash", lwd = 2)
+abline(v=5, col="#666666", lty="longdash", lwd = 2)
+plot(om_dist_quarter_c_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "OM Trimestral (std)")
+abline(v=4, col="#666666", lty="longdash", lwd = 2)
+abline(v=5, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 4 o 5 conglomerados parece tener buenos índices de calidad y un balance entre calidad y complejidad.
+
+
+#### Trimestral (LCS)-RM
+
+```{r fit-indices-plot-quarter-lcs-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(lcs_dist_quarter_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+
+plot(lcs_dist_quarter_c_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std)")
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+
+```
+
+- La solución de 5 cluster parecen presentar un buen balance entre cohesión, correspondencia con los datos originales y separación, sumado a que es menos compleja que otras soluciones con mejor calidad.
+
+
+#### Mensual
+
+```{r fit-indices-plot-month}
+par(mfrow =c(1,2)) 
+plot(om_dist_month_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", 
+     lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=8, col="#666666", lty="longdash", lwd = 2)
+plot(om_dist_month_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (std)")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=8, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 2 y 8 a 9 cluster merecen especial atención. La primera maximiza la separación, aunque las de 8 a 9 permiten hacer mayores distinciones más detalladas con una segmentación de separación razonable.
+
+
+#### Mensual (LCS)
+
+```{r fit-indices-plot-month-lcs}
+par(mfrow =c(1,2)) 
+plot(lcs_dist_month_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", 
+     lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual")
+  abline(v=4, col="#666666", lty="longdash", lwd = 2)
+plot(lcs_dist_month_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (std)")
+ abline(v=4, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La mejor solución parece ser el de 2 y 3 cluster. Sin embargo, es razonable considerar un modelo más complejo de 4 cluster con adecuadas métricas de calidad.
+
+
+#### Mensual (c/ censura)
+
+```{r fit-indices-plot-month-cens}
+par(mfrow =c(1,2)) 
+plot(om_dist_month_cens_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lty=1, lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=3, col="#666666", lty="longdash", lwd = 2)
+plot(om_dist_month_cens_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lty=1, lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (std) (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=3, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La mejor solución parece ser el de 2, seguido por el de 3 clusters, aunque el modelo de 7 ofrece una mayor complejidad pero tiene valores subóptimos en lo que refiere a las métricas de calidad.
+
+
+#### Mensual (LCS) (c/ censura)
+
+```{r fit-indices-plot-month-lcs-cens}
+par(mfrow =c(1,2)) 
+plot(lcs_dist_month_cens_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lty=1, lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (c/ censura)")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=3, col="#666666", lty="longdash", lwd = 2)
+plot(lcs_dist_month_cens_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lty=1, lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (std) (c/ censura)")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=3, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 2 clúster es la única que tiene niveles óptimos de ASW. Por otra parte, la solución de 3 clúster  tiene ajustes razonables. Por último, las soluciones de 4 y 6 conglomerados presentan buenas métricas de calidad, aunque valores ASW bajos.
+
+
+#### Mensual-RM
+
+```{r fit-indices-plot-month-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(om_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "OM Trimestral")
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+# abline(v=5, col="#666666", lty="longdash", lwd = 2)
+plot(om_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "OM Trimestral (std)")
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+# abline(v=5, col="#666666", lty="longdash", lwd = 2)
+```
+
+- Las soluciones de 5 y 6 conglomerados obtienen niveles de caldiad aceptables en términos de pertenencia de los miembros al conglomerados y otras métricas de calidad.
+
+
+#### Mensual (LCS)-RM
+
+```{r fit-indices-plot-month-lcs-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de calidad (cluster jerárquico)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(lcs_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+
+plot(lcs_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std)")
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+
+```
+
+- Si bien los valores de ASW son menores al umbral, el modelo con mejor compromiso entre complejidad y calidad es la solución de 5 conglomerados.
+
+
+:::
+
+## 2.b. Partitioning around medoids
+
+Un modelo de generación de conglomerados más flexible que el aglomerativo jerárquico y el algoritmo de k-medias. Este método busca secuencias representativas en los datos, llamados medoides (medoids) y crean conglomerados mediante la asociación de cada secuencia a su medoide más cercano basado en la matriz de distancia. El fin es minimizar la suma de dissimilaridades de las observaciones a su secuenca representativa más cercana. Un medoid se define como la observación de un grupo que tiene la suma ponderada más pequeña de distancias de las otras observaciones en su grupo.
+
+```{r clustrange-pam}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+
+##Look at cluster quality for a variety of cluster solutions
+pamRange_quarter_om <- wcKMedRange(dist_quarter_om, kvals=2:15) # this takes a while to run
+# summary(pamRange_quarter_om, max.rank=14)
+pamRange_quarter_om_rm <- wcKMedRange(dist_quarter_om_rm, kvals=2:15) # this takes a while to run
+# summary(pamRange_quarter_om_rm, max.rank=14)
+pamRange_quarter_om_cens <- wcKMedRange(dist_quarter_om_cens, kvals=2:15) # this takes a while to run
+# summary(pamRange_quarter_om_cens, max.rank=14)
+pamRange_quarter_lcs <- wcKMedRange(dist_quarter_lcs, kvals=2:15) # this takes a while to run
+# summary(pamRange_quarter_lcs, max.rank=14)
+pamRange_quarter_lcs_rm <- wcKMedRange(dist_quarter_lcs_rm, kvals=2:15) # this takes a while to run
+# summary(pamRange_quarter_lcs_rm, max.rank=14)
+pamRange_quarter_lcs_cens <- wcKMedRange(dist_quarter_lcs_cens, kvals=2:15) # this takes a while to run
+# summary(pamRange_quarter_lcs_cens, max.rank=14)
+
+pamRange_month_om <- wcKMedRange(dist_month_om, kvals=2:15) # this takes a while to run
+# summary(pamRange_month_om, max.rank=14)
+pamRange_month_om_rm <- wcKMedRange(dist_month_om_rm, kvals=2:15) # this takes a while to run
+# summary(pamRange_month_om_rm, max.rank=14)
+pamRange_month_om_cens <- wcKMedRange(dist_month_om_cens, kvals=2:15) # this takes a while to run
+# summary(pamRange_month_om_cens, max.rank=14)
+pamRange_month_lcs <- wcKMedRange(dist_month_lcs, kvals=2:15) # this takes a while to run
+# summary(pamRange_month_lcs, max.rank=14)
+pamRange_month_lcs_rm <- wcKMedRange(dist_month_lcs_rm, kvals=2:15) # this takes a while to run
+# summary(pamRange_month_lcs_rm, max.rank=14)
+pamRange_month_lcs_cens <- wcKMedRange(dist_month_lcs_cens, kvals=2:15) # this takes a while to run
+# summary(pamRange_month_lcs_cens, max.rank=14)
+
+```
+
+Visualizamos los índices de ajuste brutos y estandarizados (std).
+
+::: {.panel-tabset}
+
+### Trimestral
+
+```{r fit-indices-pam-plot-quarter}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_quarter_om, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "right", main = "OM Trimestral")
+  abline(v=4, col="#666666", lty="longdash", lwd = 2)
+  abline(v=6, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_quarter_om, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (std)")
+  abline(v=4, col="#666666", lty="longdash", lwd = 2)
+  abline(v=6, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 4 y 6 o 7 cluster parecen tener buenos índices de calidad. De todas formas, los índices ASW se encuentran en niveles que reflejan buena calidad, 6 - 7 cluster reflejan de mejor forma las distancias entre los puntos.
+
+
+### Trimestral (LCS)
+
+```{r fit-indices-pam-plot-quarter-lcs}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_quarter_lcs, stat = c("ASW","HC", "HG", "PBC"), xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
+  abline(v=3, col="#666666", lty="longdash", lwd = 2)
+  abline(v=6, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_quarter_lcs, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std)")
+  abline(v=3, col="#666666", lty="longdash", lwd = 2)
+  abline(v=6, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 3 a 6 cluster parecen mostrar mejores índices de calidad. De todas formas, las diferencias son pequeñas entre ellos, con especial atención a un número de 5 conglomerados.
+
+
+### Trimestral (c/censura)
+
+```{r fit-indices-pam-plot-quarter-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+par(mfrow =c(1,2)) 
+plot(pamRange_quarter_om_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (c/ censura)")
+ abline(v=7, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_quarter_om_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (std) (c/ censura)")
+ abline(v=7, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 7 cluster parece tener mejores índices comparativos, aunque valores subóptimos de ASW. No obstante, la solución de 2 cluster es simple y también tiene valores subóptimos.
+
+
+### Trimestral (LCS) (c/censura)
+
+```{r fit-indices-pam-plot-quarter-lcs-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_quarter_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=6, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_quarter_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std) (c/ censura)")
+abline(v=2, col="#666666", lty="longdash", lwd = 2)
+abline(v=6, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 2 conglomerados presenta mejores índices de ajuste, aunque en general bastante bajos. Si se prioriza complejidad, una solución que asuma 6 conglomerados sería razonable, aunque todos con valores subóptimos en ASW.
+
+
+### Trimestral-RM
+
+```{r fit-indices-pam-plot-quarter-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_quarter_om_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "right", main = "OM Trimestral")
+  abline(v=7, col="#666666", lty="longdash", lwd = 2)
+ # abline(v=6, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_quarter_om_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (std)")
+  abline(v=7, col="#666666", lty="longdash", lwd = 2)
+ # abline(v=6, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 7 conglomerados presenta mejores ajustes a niveles relativos, aunque las diferencias son bastante pequeñas. La solución de 2 conglomerados presenta buenos niveles de calidad.
+
+
+### Trimestral (LCS)-RM
+
+```{r fit-indices-pam-plot-quarter-lcs-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_quarter_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "LCS Trimestral")
+  abline(v=5, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_quarter_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (std)")
+  abline(v=5, col="#666666", lty="longdash", lwd = 2)
+```
+
+- Una solución de 5 conglomerados parece ser parsmoniosa y tener mejores índices de calidad, ya que los conglomeardos logran separar mejor.
+
+
+### Mensual
+
+```{r fit-indices-pam-plot-month}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+par(mfrow =c(1,2)) 
+plot(pamRange_month_om, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual")
+# abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=6, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_month_om, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (std)")
+# abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=6, col="#666666", lty="longdash", lwd = 2)
+```
+
+- Las mejores soluciones son las de 6 conglomerados, aunque con valores subóptimos en ASW.
+
+
+### Mensual (LCS)
+
+```{r fit-indices-pam-plot-month-lcs}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+par(mfrow =c(1,2)) 
+plot(pamRange_month_lcs, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual")
+# abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=6, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_month_lcs, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (std)")
+# abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=6, col="#666666", lty="longdash", lwd = 2)
+```
+
+- Las soluciones de 6 conglomerados parecen tener mejores índices de calidad, no obstante, se constatan valores subóptimos en ASW.
+
+
+### Mensual (c/censura)
+
+```{r fit-indices-pam-plot-month-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_month_om_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (c/ censura)")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=4, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_month_om_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (std) (c/ censura)")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=4, col="#666666", lty="longdash", lwd = 2)
+```
+
+- Las soluciones de 2 y 4 cluster parecen ser las mejores en términos de calidad, aunque con valores subóptimos en ASW, por lo que podrían haber componentes que no calcen en los conglomerados.
+
+
+### Mensual (LCS) (c/censura)
+
+```{r fit-indices-pam-plot-month-lcs-cens}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+
+par(mfrow =c(1,2)) 
+plot(pamRange_month_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (c/ censura)")
+  abline(v=2, col="#666666", lty="longdash", lwd = 2)
+  abline(v=4, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_month_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (std) (c/ censura)")
+  abline(v=2, col="#666666", lty="longdash", lwd = 2)
+  abline(v=4, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 2 clúster es la única que parece medianamente razonable en términos de calidad. Le sigue la de 4, aunque todas con bajos valores de calidad en general.
+
+
+### Mensual-RM
+
+```{r fit-indices-pam-plot-month-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+par(mfrow =c(1,2)) 
+plot(pamRange_month_om_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=4, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_month_om_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (std)")
+ abline(v=2, col="#666666", lty="longdash", lwd = 2)
+ abline(v=4, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 2 y 4 conglomerados consigue un ajuste relativamente mejor, siendo capaz de incorporar mayor complejidad aunque con valores levemente subóptimos en ASW.
+
+### Mensual (LCS)-RM
+
+```{r fit-indices-pam-plot-month-lcs-rm}
+#| message: false
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| paged.print: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| fig.cap: "Índices de ajuste (PAM)"
+#| results: "hide"
+#| fig-width: 8
+#| fig-height: 6
+#| column: page
+par(mfrow =c(1,2)) 
+plot(pamRange_month_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual")
+abline(v=4, col="#666666", lty="longdash", lwd = 2)
+abline(v=5, col="#666666", lty="longdash", lwd = 2)
+plot(pamRange_month_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab = "puntajes z", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (std)")
+ abline(v=4, col="#666666", lty="longdash", lwd = 2)
+ abline(v=5, col="#666666", lty="longdash", lwd = 2)
+```
+
+- La solución de 4 y 5 conglomerados parece ser la que mejores índices de calidad presentan, aunque subóptimos en ASW.
+
+:::
+
+<br>
+
+# Información de la sesión
+
+```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T, results='hold'}
+cat(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
+cat(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
+cat(paste0("Editor context: ", getwd()))
+cat("quarto version: "); system("quarto --version") 
+
+quarto::quarto_version()
+
+save.image(paste0(folder_path,"20240903_25.RData"))
+```
+
+```{r session-info-r, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T, results='hold'}
+#| class-output: center-table
+
+sesion_info <- devtools::session_info()
+dplyr::select(
+  tibble::as_tibble(sesion_info$packages),
+  c(package, loadedversion, source)
+) |> 
+ knitr::kable(caption = "R packages", format = "html",
+      col.names = c("Row number", "Package", "Version"),
+    row.names = FALSE,
+      align = c("c", "l", "r")) |> 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```
+
+
+```{r session-info-python, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T, results='hold'}
+#| class-output: center-table
+
+reticulate::py_list_packages()%>% 
+ knitr::kable(caption = "Python packages", format = "html",
+      col.names = c("Package", "Version", "Requirement"),
+    row.names = FALSE,
+      align = c("c", "l", "r", "r"))%>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12)|>
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```

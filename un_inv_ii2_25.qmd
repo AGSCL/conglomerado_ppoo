@@ -1,0 +1,2862 @@
+---
+title: "Paso 2. Selección de observaciones"
+description: |
+  
+date-format: "D [d]e MMM, YYYY"
+lang: es
+date: last-modified
+bibliography: [_lit/referencias.bib]
+csl: "_lit/american-medical-association.csl" # (Opcional: estilo de citas, p.ej., APA)
+author: "Andrés González Santa Cruz"
+format: 
+  html:
+    css: [_lib/styles.scss]
+    code-fold: true
+    embed-resources: true
+    fig-cap-location: top
+lightbox: auto
+toc: true
+toc-depth: 5
+toc-location: left
+toc-float: true
+editor: source
+---
+
+<style>
+.scrollable-content {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+<style>
+pre.scrollable-code {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+
+
+<div class="scrollable-content">
+```{r}
+#| message: true
+#| include: true
+#| warning: true
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+
+#remover imágenes
+while(!dev.cur())dev.off()
+cat("\014")
+
+```
+</div>
+
+# Instalar paquetes, etc.
+
+<div class="scrollable-content">
+```{r setup}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+
+#elegir repositorio
+if(Sys.info()["sysname"]=="Windows"){
+  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+}
+options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
+
+#borrar caché
+#system("fc-cache -f -v")
+
+if(Sys.info()["sysname"]=="Windows"){
+if (getRversion() != "4.4.1") { stop("Requiere versión de R 4.4.1. Actual: ", getRversion()) }
+}
+if(Sys.info()["sysname"]=="Linux"){
+if (getRversion() != "4.4.1") { stop("Requiere versión de R 4.4.1. Actual: ", getRversion()) }
+}
+
+# 0.Fechas y paquetes --------------------------------------------------
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+# paquetes en R
+
+if (Sys.info()["sysname"] == "Linux") {
+  # Verificar si librsvg-2.so.2 ya está instalado
+  librsvg_exists <- system("ldconfig -p | grep librsvg-2.so.2", ignore.stdout = TRUE, ignore.stderr = TRUE)
+ 
+  if (librsvg_exists != 0) {
+	message("librsvg no se encontró. Instalando librsvg2-dev...")
+	# Actualiza la lista de paquetes e instala librsvg2-dev
+	system("sudo apt-get update && sudo apt-get install -y librsvg2-dev")
+  } else {
+	message("librsvg ya está instalado.")
+  }
+}
+
+packages <- list(
+  # Manipulación de datos y vaisualización
+  data = c("dplyr", "lubridate", "ggplot2", "janitor", "ggalluvial", "tidytable", "purrr", "magrittr"),
+  
+  # Improtar datos
+  rio = c("arrow", "rio", "nanoparquet", "haven"),
+  
+  #Analisis_Secuencias_Clustering
+  clustering = c("TraMineR", "TraMineRextras", "ggseqplot",  "factoextra",
+                                     "cluster", "WeightedCluster", "NbClust"),
+  
+  # Diagramar
+  diagram = c("DiagrammeR", "rsvg", "DiagrammeRsvg", "webshot", "gtsummary", "cowplot", 
+                          "grid", "gridExtra", "kableExtra"),
+  
+  # Analizar
+  analysis = c("epiR", "naniar", "psych", "pROC", "caret", "boot", 
+               "parallel", "tableone", "sqldf"),
+  
+  #optimización y desarrollo
+  pacakge_develop = c("devtools", "job", "foreach", "doParallel", "progressr"),
+  
+  # Modelamiento y ML
+  ml = c("SuperLearner", "glmnet", "randomForest", "missRanger",
+         "ranger", "dbarts", "lmtest", "emmeans", "effsize", "rstatix", "stargazer"),
+  
+  otros = c("chisq.posthoc.test", "Tmisc", "quarto")
+)
+
+# Sys.setenv(CC = "/usr/bin/gcc-12", CXX = "/usr/bin/g++-12") #bajar de gcc 13 a 12
+# Sys.setenv(CXXFLAGS = "-O0") # ignorar error
+# Sys.setenv(CC = "clang", CXX = "clang++") # si no funciona lo otro, ambiar compilador
+#pak::pak("duckdb/duckdb-r")
+#install.packages("duckdb", repos = "https://duckdb.r-universe.dev")
+if(!require(duckdb)){pak::pkg_install("duckdb/duckdb-r@main?source=false")}
+
+pak::pak_sitrep()
+#pak::sysreqs_check_installed(unique(unlist(packages)))
+#pak::lockfile_create(unique(unlist(packages)),  "dependencies_ubuntu.lock", dependencies=T)
+#pak::lockfile_install("dependencies_ubuntu2.lock")
+#pak::lockfile_install("dependencies_windows2.lock") #saqué doMC
+#pak::pak("duckdb/duckdb-r") #si hay error, github version
+#https://rdrr.io/cran/pak/man/faq.html
+#pak::cache_delete()
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+library(tidytable)
+if(!require(bpmn)){pak::pak("bergant/bpmn")}
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+sum_dates <- function(x){
+ 
+  cbind.data.frame(
+	min= as.Date(min(unclass(as.Date(x)), na.rm=T), origin = "1970-01-01"),
+	p001= as.Date(quantile(unclass(as.Date(x)), .001, na.rm=T), origin = "1970-01-01"),
+	p005= as.Date(quantile(unclass(as.Date(x)), .005, na.rm=T), origin = "1970-01-01"),
+	p025= as.Date(quantile(unclass(as.Date(x)), .025, na.rm=T), origin = "1970-01-01"),
+	p25= as.Date(quantile(unclass(as.Date(x)), .25, na.rm=T), origin = "1970-01-01"),
+	p50= as.Date(quantile(unclass(as.Date(x)), .5, na.rm=T), origin = "1970-01-01"),
+	p75= as.Date(quantile(unclass(as.Date(x)), .75, na.rm=T), origin = "1970-01-01"),
+	p975= as.Date(quantile(unclass(as.Date(x)), .975, na.rm=T), origin = "1970-01-01"),
+	p995= as.Date(quantile(unclass(as.Date(x)), .995, na.rm=T), origin = "1970-01-01"),
+	p999= as.Date(quantile(unclass(as.Date(x)), .999, na.rm=T), origin = "1970-01-01"),
+	max= as.Date(max(unclass(as.Date(x)), na.rm=T), origin = "1970-01-01")
+  )
+}
+smd_bin <- function(x,y){
+  z <- x*(1-x)
+  t <- y*(1-y)
+  k <- sum(z,t)
+  l <- k/2
+  
+  return((x-y)/sqrt(l))
+  
+}
+
+theme_custom_sjplot2 <- function(base_size = 12, base_family = "") {
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      # Text elements
+      text = element_text(size = base_size, family = base_family),
+      plot.title = element_text(face = "bold", hjust = 0.5, size = base_size * 1.2),
+      plot.subtitle = element_text(hjust = 0.5, margin = margin(b = 10)),
+      axis.title = element_text(size = base_size, face = "bold"),
+      axis.text = element_text(size = base_size * 0.8),
+      axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+      axis.text.y = element_text(angle = 0, hjust = 1, vjust = 0.5),
+      axis.title.x = element_text(margin = margin(t = 10)),
+      axis.title.y = element_text(margin = margin(r = 10)),
+      
+      # Plot layout
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20),
+      panel.grid.major = element_line(color = "grey80"),
+      panel.grid.minor = element_blank(),
+      legend.position = "right",
+      legend.text = element_text(size = base_size * 0.8),
+      legend.title = element_text(size = base_size, face = "bold"),
+      legend.background = element_rect(fill = "white", colour = NA),
+      legend.box.background = element_rect(colour = "grey80", linetype = "solid"),
+      legend.key = element_rect(fill = "white", colour = "white")
+    )
+}
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+num_cores <- parallel::detectCores() -1
+data.table::setDTthreads(threads = num_cores)#restore_after_fork = NULL, throttle = NULL)
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#CONFIG #######################################################################
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+options(scipen=2) #display numbers rather scientific number
+```
+</div>
+
+# Estructurar base datos
+
+- Eliminar registros de menores de 15 años, de las personas que al 2018 tuvieron un registro entre 15-29 años.
+- Eliminar duplicados en muchos campos [combinación de: RUN, Establecimiento, Área de atención al egreso, Fecha de ingreso, Fecha d egreso, Glosa previsión, Tramo, Sexo, Edad (en años), Diagnóstico (1 a 5)].
+- Añadimos una fecha mínima de egreso por RUN (`min_fecha_egreso_rec24_num`)
+
+<div class="scrollable-content">
+```{r import-databases}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+# Create a new environment to load the data into
+env <- new.env()
+
+invisible("Traemos la base de datos")
+if (Sys.info()["sysname"] == "Linux") {
+  # Load all data into the environment
+  #load("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/20240320.RData", envir = env)
+  load("20240405_25.RData", envir = env, verbose = T)
+
+} else {
+  # Load all data into the environment
+  #load("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/20240320.RData", envir = env)
+  load("20240405_25.RData", envir = env, verbose = T)
+}
+  
+# Update 2024-05-10: eliminated people that experienced no SM or SUD related hosp before 2017, but in 2018 still had SM or SUD issues before the first at 15-29
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_2 <- filter(env$tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult, !run %in% (env$tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult|> filter(edad_anos<15)|> pull(run)))
+
+paste0('Filtrando <15 \n(n= ',
+                 	formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_2),
+                         	format='f', big.mark='.', digits=0),
+                 	';\np= ',
+                 	formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_2$run)),
+                         	format='f', big.mark='.', digits=0),')')
+
+#Update 2024-05-11: Eliminate events of people with duplicated rows in run, area of admission, date of admission and discharge, and the first ICD-10 codes
+vector_duplicates<- c("run", "estab_homo",  "areaf_egr", "fecha_ingreso", "fecha_egreso", "glosa_prevision", "benef", "glosa_sexo", "edad_anos", "diag1", "diag2", "diag3", "diag4", "diag5")
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_3 <-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_2|>
+  group_by(!!!syms(vector_duplicates))|>
+  mutate(n_duplicated=row_number())|>
+  ungroup()|>
+  filter(n_duplicated<2)
+
+paste0('Eliminamos filas duplicadas en RUN, establecimiento, previsión, tramo, sexo, edad y los primeros 5 diagnósticos <15 \n(n= ',
+                 	formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_2),
+                         	format='f', big.mark='.', digits=0),
+                 	';\np= ',
+                 	formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_2$run)),
+                         	format='f', big.mark='.', digits=0),')')
+
+
+# Extract only the desired object
+data_long <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult_3
+
+data_long <- group_by(data_long, run)|>
+  mutate(min_fecha_egreso_rec24_num= min(fecha_egreso_rec24_num))|>
+  ungroup()
+```
+</div>
+
+<br>
+
+## Combinar base con código hospitales 
+
+Traemos las bases de datos, junto con algunas bases de referencia para contrastar el código de establecimiento. Traemos la base de datos enviada el 2024 con el código de establecimiento, junto con algunos libros de código para referencia. También eliminamos filas duplicadas y todo lo guardamos en `EH_2010_2022_Pasantes_v2_encrip`.
+
+<div class="scrollable-content">
+```{r importar-establecimientos-y-codigos}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+invisible("Traemos la base de datos")
+if (Sys.info()["sysname"] == "Linux") {
+#dtX2023_12_05_DatosEgresosHosp_encrip<-rio::import("~/workspace/extracted/20231205_hosp_mod20240404.parquet.gzip")
+EH_2010_2022_Pasantes_v2_encrip <- readr::read_delim("_data/EH_2010_2022_Pasantes_v2_encrip.csv", 
+                                              delim = ";", escape_double = FALSE, trim_ws = TRUE) |> as_tidytable()
+
+} else {
+EH_2010_2022_Pasantes_v2_encrip <- readr::read_delim("_data/EH_2010_2022_Pasantes_v2_encrip.csv", 
+                                              delim = ";", escape_double = FALSE, trim_ws = TRUE)|> as_tidytable()
+}
+
+vector_duplicates<- c("RUN", "ESTAB_HOMO",  "AREAF_EGR", "FECHA_INGRESO", "FECHA_EGRESO", "GLOSA_PREVISION", "BENEF", "GLOSA_SEXO", "EDAD_ANOS", "DIAG1", "DIAG2", "DIAG3", "DIAG4", "DIAG5")
+
+gc()
+
+
+invisible("Estamos descartando duplicados")
+EH_2010_2022_Pasantes_v2_encrip <-
+  EH_2010_2022_Pasantes_v2_encrip|>
+  group_by(!!!syms(vector_duplicates))|>
+  mutate(n_duplicated=row_number())|>
+  ungroup()|>
+  filter(n_duplicated<2)
+
+paste0('Eliminamos filas duplicadas en RUN, establecimiento, previsión, tramo, sexo, edad y los primeros 5 diagnósticos <15 \n(n= ',
+                 	formatC(nrow(EH_2010_2022_Pasantes_v2_encrip),
+                         	format='f', big.mark='.', digits=0),
+                 	';\np= ',
+                 	formatC(length(unique(EH_2010_2022_Pasantes_v2_encrip$RUN)),
+                         	format='f', big.mark='.', digits=0),')')
+#[1] "Eliminamos filas duplicadas en RUN, establecimiento, previsión, tramo, sexo, edad y los primeros 5 diagnósticos <15 \n(n= 20.952.449;\np= 9.646.325)"
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+invisible("Obtener base de datos de Establecimientos")
+gc()
+X717508813_Establecimientos_ChileDEIS_MINSAL_29_04_2022 <- readxl::read_excel("_antecedentes/717508813-Establecimientos-ChileDEIS-MINSAL-29-04-2022.xlsx", sheet = "Establecimientos Vig", skip = 1)|>janitor::clean_names()
+
+X717508813_Establecimientos_ChileDEIS_MINSAL_cerrado_29_04_2022 <- readxl::read_excel("_antecedentes/717508813-Establecimientos-ChileDEIS-MINSAL-29-04-2022.xlsx", sheet = "Establecimientos Cerrados", skip = 1)|>janitor::clean_names()|>
+  mutate(codigo_vigente=as.numeric(codigo_vigente))
+```
+</div>
+
+Unimos la base de datos más reciente con la base de datos que estoy trabajando. La nueva base se llama `data_long_establecimiento`. Una forma de unirlos fue en base a RUN, fecha de ingreso (formateando la original de DEIS a %YYYY-%mm-%dd), fecha de egreso (formato DEIS) y más importante, con el código de establecimiento proporcionado en 2023 pero en sus primeros 5 dígitos vs. el código actual. Todo lo anterior, con la finalidad de maximizar la posibilidad de encontrar registros pareados únicos (evitar n:n y por tanto tener una unión ambigua de los datos).
+
+```{r union-bd-data-long-hosp-original}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+gc()
+
+invisible("Unión con la base de datos corregida")
+data_long_establecimiento<-
+  data_long|>
+  mutate(fecha_ingreso_rec_fmt= as.Date(fecha_ingreso_rec), fecha_egreso_rec_fmt= as.Date(fecha_egreso_rec))|>
+  #select(run, estab, fecha_ingreso_rec, fecha_egreso_rec, estab, estab_homo)|>
+  left_join(mutate(EH_2010_2022_Pasantes_v2_encrip[,c("RUN", "FECHA_INGRESO_FMT_DEIS", "FECHA_EGRESO_FMT_DEIS", "ESTAB", "ESTAB_HOMO", "TIPO_EDAD","DIAG1", "DIAG2", "DIAG3")], estab_homo_five=as.numeric(stringr::str_sub(ESTAB_HOMO, 1, 5))),
+                     by=c("run"="RUN", "fecha_ingreso_rec_fmt"="FECHA_INGRESO_FMT_DEIS", "fecha_egreso_rec_fmt"="FECHA_EGRESO_FMT_DEIS", "tipo_edad"="TIPO_EDAD", "diag1"="DIAG1", "diag2"="DIAG2", "diag3"="DIAG3", "estab_homo"="estab_homo_five")) |> 
+    (\(df) {
+    print(cat(paste0("Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()
+# Total: 14037 #perdemos una observación
+# NULL
+# Total: 6629
+# NULL  
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+if(
+  nrow(data_long_establecimiento) >nrow(data_long)){warning("Producto de la unión se añaden filas (hay un pareamiento 1 a >1)")}
+
+
+paste0("Pacientes duplicados (aunque sólo vemos duplicados en términos de RUN, fecha de ingreso y fecha de egreso aquí): ",
+data_long_establecimiento|>
+  janitor::get_dupes(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt)|>
+    distinct(run)|>nrow(),
+"; eventos: ",
+data_long_establecimiento|>
+  janitor::get_dupes(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt)|>
+  nrow()
+)
+#[1] "Pacientes duplicados: 6; eventos: 16" # se mantiene del 2024
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+cat("Dado que había duplicados, seleccionamos el primer elemento que coincida. Aunque llama la atención que no agrega observaciones a pesar de eso (si hay 1:n, debiese aniadir a x obs)")
+data_long_establecimiento<-
+  data_long|>
+  mutate(fecha_ingreso_rec_fmt= as.Date(fecha_ingreso_rec), fecha_egreso_rec_fmt= as.Date(fecha_egreso_rec))|>
+  #select(run, estab, fecha_ingreso_rec, fecha_egreso_rec, estab, estab_homo)|>
+  left_join(mutate(EH_2010_2022_Pasantes_v2_encrip[,c("RUN", "FECHA_INGRESO_FMT_DEIS", "FECHA_EGRESO_FMT_DEIS", "ESTAB", "ESTAB_HOMO", "TIPO_EDAD", "DIAG1", "DIAG2", "DIAG3")], estab_homo_five=as.numeric(stringr::str_sub(ESTAB_HOMO, 1, 5))),
+                     by=c("run"="RUN", "fecha_ingreso_rec_fmt"="FECHA_INGRESO_FMT_DEIS", "fecha_egreso_rec_fmt"="FECHA_EGRESO_FMT_DEIS", "tipo_edad"="TIPO_EDAD", "diag1"="DIAG1", "diag2"="DIAG2", "diag3"="DIAG3", "estab_homo"="estab_homo_five"), multiple="first") |> 
+    (\(df) {
+    print(cat(paste0("Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()
+```
+
+Ahora que tenemos el código de establecimiento, unimos con los libros de códigos y directorios de establecimientos. Particularmente, traemos nombres, nivel de complejidad, modalidad de atención, ubicación, tipo de establecimiento, código de comuna y región. En caso que algún campo no se encuentre en la base `X717508813_Establecimientos_ChileDEIS_MINSAL_29_04_2022`, se toma de `X717508813_Establecimientos_ChileDEIS_MINSAL_cerrado_29_04_2022`.
+
+```{r union-establecimiento-info-ext}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+gc()
+
+data_long_establecimiento_2024_std<-
+  data_long_establecimiento |>
+  left_join(janitor::clean_names(X717508813_Establecimientos_ChileDEIS_MINSAL_29_04_2022)[,c("codigo_antiguo", "codigo_vigente", "codigo_comuna", "codigo_region", "tiene_servicio_de_urgencia", "nombre_oficial", "tipo_establecimiento", "nivel_de_atencion", "tipo_de_prestador_sistema_de_salud", "longitud_grados_decimales", "latitud_grados_decimales", "nivel_de_complejidad", "modalidad_de_atencion")], by= c("ESTAB_HOMO"="codigo_vigente"), suffix = c("", "_est"))|>
+  left_join(janitor::clean_names(X717508813_Establecimientos_ChileDEIS_MINSAL_cerrado_29_04_2022)[,c("codigo_antiguo", "codigo_vigente", "codigo_comuna", "codigo_region", "tiene_servicio_de_urgencia", "nombre_oficial", "tipo_establecimiento", "nivel_de_atencion", "tipo_de_prestador_sistema_de_salud", "longitud_grados_decimales", "latitud_grados_decimales", "nivel_de_complejidad", "modalidad_de_atencion")], by= c("ESTAB_HOMO"="codigo_vigente"), suffix = c("", "_cerrado"))|>
+  mutate(longitud_grados_decimales_cerrado= as.numeric(longitud_grados_decimales_cerrado), latitud_grados_decimales_cerrado= as.numeric(latitud_grados_decimales_cerrado)) |> 
+  # Para generar las variables, vemos si está en una de las bases, si no, ponemos el valor de la otra
+  mutate(
+    codigo_antiguo= ifelse(is.na(codigo_antiguo),codigo_antiguo_cerrado, codigo_antiguo),       
+    codigo_comuna= ifelse(is.na(codigo_comuna),codigo_comuna_cerrado, codigo_comuna),
+    codigo_region= ifelse(is.na(codigo_region),codigo_region_cerrado, codigo_region),
+    tiene_servicio_de_urgencia= ifelse(is.na(tiene_servicio_de_urgencia),tiene_servicio_de_urgencia_cerrado, tiene_servicio_de_urgencia),
+    nombre_oficial= ifelse(is.na(nombre_oficial),nombre_oficial_cerrado, nombre_oficial),
+    tipo_establecimiento= ifelse(is.na(tipo_establecimiento),tipo_establecimiento_cerrado, tipo_establecimiento),
+    nivel_de_atencion= ifelse(is.na(nivel_de_atencion),nivel_de_atencion_cerrado, nivel_de_atencion),
+    tipo_de_prestador_sistema_de_salud= ifelse(is.na(tipo_de_prestador_sistema_de_salud),tipo_de_prestador_sistema_de_salud_cerrado, tipo_de_prestador_sistema_de_salud),
+    longitud_grados_decimales= ifelse(is.na(longitud_grados_decimales),longitud_grados_decimales_cerrado, longitud_grados_decimales),
+    latitud_grados_decimales= ifelse(is.na(latitud_grados_decimales),latitud_grados_decimales_cerrado, latitud_grados_decimales),
+    nivel_de_complejidad= ifelse(is.na(nivel_de_complejidad),nivel_de_complejidad_cerrado, nivel_de_complejidad),
+    modalidad_de_atencion= ifelse(is.na(modalidad_de_atencion),modalidad_de_atencion_cerrado, modalidad_de_atencion))|>
+  select(-matches("\\$|\\_cerrado$"))|>
+    (\(df) {
+    print(cat(paste0("Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()
+
+cat("Perdidos en establecimiento (TRUE= perdidos)\n");as.numeric(table(is.na(data_long_establecimiento_2024_std$ESTAB_HOMO)))
+table(is.na(data_long_establecimiento_2024_std$ESTAB))
+invisible("Por lo visto no ")
+
+invisible("Ver si se generan más filas producto de la unión")
+if(
+  data_long_establecimiento_2024_std|>nrow() >data_long_establecimiento|>nrow()){stop("Producto de la unión se añaden filas (hay un pareamiento 1 a >1)")}
+
+```
+<br>
+
+# Formatear base de datos
+
+Una vez que logramos recuperar la información de interés, estandarizamos datos y normalizamos valores, limpiando valores erróneos, etc.
+
+Primero, eliminamos variables que no existen en caso que las hubiera.
+
+```{r eliminar-vars-nac}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+data_long_establecimiento_2024_std$nac_chile<-NULL
+data_long_establecimiento_2024_std$nac_chile<-NULL
+data_long_establecimiento_2024_std$perc_nac_cl<-NULL
+
+```
+
+<br>
+
+## Imputación Previsión y Tramo
+
+Hubo una columna clave que tenía una categoría de respuesta ("Desconocido") altamente perjudicial para nuestros análisis. Dado el bajo porcentaje de usuarios en esta categoría (<1%), se decidió imputar, asumiendo que hubo una migración a otro sistema previsional es improbable.
+
+```{r prev-tramo-pre-explorar}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+data_long_establecimiento_2024_std |> 
+  janitor::tabyl(glosa_prevision) |> 
+  mutate(percent= sprintf("%1.1f",percent*100)) |> 
+  knitr::kable("markdown", caption= "Previsión (total, no anidado por usuario)", col.names=c("Previsión", "n", "porcentaje"))
+```
+
+Vemos la anidación de registros por paciente.
+
+```{r prev-tramo-explorar}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+message(paste0("Número de pacientes con previsión desconocida (al menos un registro): ",
+data_long_establecimiento_2024_std|>
+   group_by(run)|>
+   summarise(sum_total= n(),
+             sum_desc= sum(glosa_prevision=="DESCONOCIDO"), 
+             sum_capr=sum(glosa_prevision=="CAPREDENA"),
+             sum_dipr=sum(glosa_prevision=="DIPRECA"),
+             sum_fonas=sum(glosa_prevision=="FONASA"),
+             sum_isapr=sum(glosa_prevision=="ISAPRE"),
+             sum_ning=sum(glosa_prevision=="NINGUNA"),
+             sum_sisa=sum(glosa_prevision=="SISA"))|>
+  filter(sum_desc>0)|>
+  nrow()
+))
+#[1] "Número de pacientes con previsión desconocida: 62 a 73"
+
+
+message(paste0("Número de pacientes con previsión desconocida y sólo ese valor: ",
+data_long_establecimiento_2024_std |>
+  group_by(run) |>
+  summarise(
+    sum_total = n(),
+    perc_desc = sum(glosa_prevision == "DESCONOCIDO") / n(), 
+    perc_capr = sum(glosa_prevision == "CAPREDENA") / n(),
+    perc_dipr = sum(glosa_prevision == "DIPRECA") / n(),
+    perc_fonas = sum(glosa_prevision == "FONASA") / n(),
+    perc_isapr = sum(glosa_prevision == "ISAPRE") / n(),
+    perc_ning = sum(glosa_prevision == "NINGUNA") / n(),
+    perc_sisa = sum(glosa_prevision == "SISA") / n()
+  ) |> 
+  filter(perc_desc==1)|>
+  nrow()
+))
+
+message(paste0("Número de pacientes con previsión desconocida y otros: ",
+data_long_establecimiento_2024_std |>
+  group_by(run) |>
+  summarise(
+    sum_total = n(),
+    perc_desc = sum(glosa_prevision == "DESCONOCIDO") / n(), 
+    perc_capr = sum(glosa_prevision == "CAPREDENA") / n(),
+    perc_dipr = sum(glosa_prevision == "DIPRECA") / n(),
+    perc_fonas = sum(glosa_prevision == "FONASA") / n(),
+    perc_isapr = sum(glosa_prevision == "ISAPRE") / n(),
+    perc_ning = sum(glosa_prevision == "NINGUNA") / n(),
+    perc_sisa = sum(glosa_prevision == "SISA") / n()
+  ) |> 
+  filter(perc_desc<1 & perc_desc>0)|>
+  nrow()
+))
+
+message(paste0("Número de pacientes con previsión desconocida (más de 1 registro): ",
+data_long_establecimiento_2024_std|>
+   group_by(run)|>
+   summarise(sum_total= n(),
+             sum_desc= sum(glosa_prevision=="DESCONOCIDO"), 
+             sum_capr=sum(glosa_prevision=="CAPREDENA"),
+             sum_dipr=sum(glosa_prevision=="DIPRECA"),
+             sum_fonas=sum(glosa_prevision=="FONASA"),
+             sum_isapr=sum(glosa_prevision=="ISAPRE"),
+             sum_ning=sum(glosa_prevision=="NINGUNA"),
+             sum_sisa=sum(glosa_prevision=="SISA"))|>
+   filter(sum_desc>1)|>
+   nrow()
+))
+#Número de pacientes con previsión desconocida: 1 # de 6 a 7 al 2025-03-15
+```
+
+A diferencia de la base del 2024 pasamos de 6 a 1 valor desconocido. En base a la base de datos, tomaremos en cuenta el hecho de que la base de datos tiene valores anidados por usuario, y de ahí recuperamos valores de previsión.
+
+```{r prev-tramo-diagrama}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+bpmn_fig<-
+bpmn::bpmn("_figs/diagram_imputacion_prev_isapre_25.bpmn")
+bpmn_fig
+```
+
+
+```{r prev-tramo-diagrama2}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hide
+#| fig-show: hide
+
+
+htmlwidgets::saveWidget(bpmn_fig, 
+                  "_figs/_diagram_imputacion_prev_isapre_25.html")
+webshot::webshot("_figs/_diagram_imputacion_prev_isapre_25.html", 
+                 "_figs/_diagram_imputacion_prev_isapre_25.png",
+                 vwidth = 300*1.2, vheight = 300,  zoom=10, expand=100)  # Prueba con diferentes coordenadas top, left, width, and height.
+```
+
+La lógica es la siguiente:
+
+- Contar registros por previsión para cada paciente
+
+- Enfocarse en quienes tienen previsión "DESCONOCIDO"
+
+- Decidir la previsión más probable según la frecuencia en sus otros registros
+
+- En caso de ambigüedad, etiquetar claramente con "IMPUTAR"
+
+- Corregir nombres finales para ser  interpretados en la columna `reemplazo`
+
+
+```{r prev-tramo-imp}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+data_long_est_24_std_imp_prev <-
+  data_long_establecimiento_2024_std |>
+  group_by(run) |>
+  summarise(
+    sum_desc = sum(glosa_prevision == "DESCONOCIDO"),
+    sum_capr = sum(glosa_prevision == "CAPREDENA"),
+    sum_dipr = sum(glosa_prevision == "DIPRECA"),
+    sum_fonas = sum(glosa_prevision == "FONASA"),
+    sum_isapr = sum(glosa_prevision == "ISAPRE"),
+    sum_ning = sum(glosa_prevision == "NINGUNA"),
+    sum_sisa = sum(glosa_prevision == "SISA")
+  ) |>
+  filter(sum_desc>0) |> 
+  rowwise() |>
+  mutate(reemplazo = {
+    # Get all sum_ values excluding sum_desc
+    sums <- c(sum_capr, sum_dipr, sum_fonas, sum_isapr, sum_ning, sum_sisa)
+    names_sums <- c("sum_capr", "sum_dipr", "sum_fonas", "sum_isapr", "sum_ning", "sum_sisa")
+    
+    if (sum_desc == 1) {
+      max_val <- max(sums)
+      indices_max <- which(sums == max_val)
+      names_max <- names_sums[indices_max]
+      
+      # Exclude sum_isapr if possible
+      if ("sum_isapr" %in% names_max && length(names_max) > 1) {
+        names_max <- names_max[names_max != "sum_isapr"]
+      }
+      if (length(names_max) == 1) {
+        names_max
+      } else {
+        "IMPUTAR"
+      }
+    } else if (sum_desc > 1) {
+      # Find columns with values >= sum_desc
+      valid_cols <- names_sums[sums >= sum_desc]
+      if (length(valid_cols) == 1) {
+        valid_cols
+      } else if (length(valid_cols) > 1) {
+        # More than one valid column, choose the one with max value or any if tied
+        max_val_cols <- max(sums[sums >= sum_desc])
+        max_cols <- names_sums[which(sums == max_val_cols)]
+        max_cols[1]  # Choose the first one if tied
+      } else {
+        "IMPUTAR"
+      }
+    } else {
+      "IMPUTAR"
+    }
+  }) |>
+  ungroup() |> 
+  mutate(reemplazo_rec= case_when(reemplazo=="sum_capr"~ "CAPREDENA",
+                                  grepl("sum_dipr",reemplazo)~ "DIPRECA",
+                                  grepl("sum_fonas",reemplazo)~ "FONASA",
+                                  grepl("sum_sisa",reemplazo)~ "SISA",
+                                  grepl("sum_isapr",reemplazo)~ "ISAPRE",
+                                  grepl("sum_capr",reemplazo)~ "CAPREDENA",
+                                  grepl("sum_ning",reemplazo)~ "NINGUNA",
+                                  T~reemplazo)) 
+
+data_long_est_24_std_imp_prev |> 
+  janitor::tabyl(reemplazo_rec) |> 
+  mutate(percent= sprintf("%1.1f",percent*100)) |> 
+  knitr::kable("markdown", caption="Resultado de aplicar el árbol de decisión (candidatos reemplazo)", col.names=c("Previsión", "n", "proporción"))
+```
+
+Ahora aplicamos las reglas sobre la base, reemplazando los valores en base RUNs (supuesto de invarianza en el tiempo).
+
+```{r prev-tramo-imp-aplicacion}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+data_long_est_24_std_imp_rec_prev <-
+  data_long_establecimiento_2024_std |>
+  left_join(data_long_est_24_std_imp_prev[, c("run", "reemplazo_rec")], by = "run") |>
+  (\(df) {
+    if (nrow(df) > nrow(data_long_establecimiento_2024_std)) {
+      stop("left join added rows")
+    }
+    df
+  })() |>
+  mutate(
+    glosa_prevision_rec = ifelse(!is.na(reemplazo_rec), reemplazo_rec, glosa_prevision),
+    glosa_prevision_rec = ifelse(glosa_prevision_rec == "IMPUTAR", NA, glosa_prevision_rec)
+  )
+
+invisible("eliminamos columnas de no interés")
+data_long_est_24_std_imp_rec_prev$reemplazo_rec<-NULL
+
+data_long_est_24_std_imp_rec_prev |>
+  filter(is.na(glosa_prevision_rec)) |> 
+    (\(df) {
+    print(cat(paste0("A imputar, Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("A imputar, RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+  })()
+
+invisible("Añadimos más n")
+data_long_est_24_std_imp_rec_prev |>
+  janitor::tabyl(glosa_prevision_rec)|>
+  knitr::kable("markdown", caption="Resultado de aplicar el árbol de decisión en la base de datos general", col.names= c("Previsión", "n", "proporción", "proporción válida"))
+```
+Para el resto, hacer imputación probabilística. Se utilizaron las siguientes variables predictoras: 
+
+- Fecha de ingreso más antigua (`min_fecha_egreso_rec24_num`)
+- Pertenencia o autoidentificación a algún pueblo originario (`inclusivo_real_historico`)
+- Edad mínima en años (ingreso más antiguo) (`min_edad_anos`)
+- Sexo (`glosa_sexo`)
+- Establecimiento (`ESTAB_HOMO`)
+
+Se utilizaron 900 árboles, imputación PMM con k=100, y un máximo de 500 iteraciones hasta la convergencia.
+
+```{r prev-tramo-imp-ranger}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+gc()
+
+invisible("2025-03-15: Dejo los que corresponden a fechas menores al 2018. Saqué códigos z porque era algo exploratorio. A mi me importaba usar la base de datos y ahora no la necesito")
+ttos_filt2<-
+  env$tt_dtX2023_12_05_DatosEgresosHosp_encrip |> 
+  filter(run %in% unique(data_long_est_24_std_imp_rec_prev$run)) |> 
+  filter(fecha_ingreso_rec24<"2018-01-01") |> 
+  arrange(run, fecha_ingreso_rec24) |> 
+  mutate(dias_en_tto=fecha_egreso_rec24-fecha_ingreso_rec24) |> 
+  mutate(dias_fuera_tto=lead(fecha_ingreso_rec24)-fecha_egreso_rec24) |> 
+  group_by(run) |> 
+  summarise(promedio_dias_fuera_tto= mean(dias_fuera_tto, na.rm=T), 
+                   mediana_dias_fuera_tto= quantile(dias_fuera_tto, .5, na.rm=T),
+                   promedio_dias_tto= mean(dias_en_tto), 
+                   mediana_dias_tto= quantile(dias_en_tto, .5),
+                   ttos= n()) |> 
+  ungroup()
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+cat("Añadiendo los datos históricos de días de tratamiento previos al 2018 y el promedio de días en tratamiento, genero una base para imputación")
+data_long_est_24_std_imp_rec_prev2 <- 
+  left_join(data_long_est_24_std_imp_rec_prev, ttos_filt2[,c("run", "promedio_dias_tto", "ttos")], by="run")
+
+invisible("Si producto de la unión se añaden más filas, generar error. De lo contrario, sobreescribo data_long_est_24_std_imp_rec_prev y elimino la base anterior")
+if(nrow(data_long_est_24_std_imp_rec_prev2)> 
+   nrow(data_long_est_24_std_imp_rec_prev)){
+     stop("Se generaron filas")
+     }else {
+       data_long_est_24_std_imp_rec_prev<-data_long_est_24_std_imp_rec_prev2; rm(data_long_est_24_std_imp_rec_prev2)
+     }
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+set.seed(2125)
+data_long_est_24_std_imp_rec_imp<-
+  missRanger::missRanger(
+    formula =  glosa_prevision_rec ~ min_fecha_egreso_rec24_num+ inclusivo_real_historico+ min_edad_anos+ glosa_sexo+ ESTAB_HOMO,#+ ttos+ promedio_dias_tto+ diag1,#+ ttos+ promedio_dias_tto,
+    data= data_long_est_24_std_imp_rec_prev|>
+      dplyr::group_by(run)|> 
+      dplyr::mutate( min_edad_anos=min(edad_anos, na.rm=T))|>
+      dplyr::ungroup()|> 
+      dplyr::mutate(ttos=ifelse(!is.na(ttos),ttos, 0),  promedio_dias_tto= ifelse(!is.na( promedio_dias_tto),as.numeric( promedio_dias_tto),0)),
+    num.trees = 1800, 
+    pmm.k = 5,                
+    returnOOB=T,
+    maxiter= 500,
+    verbose = 2, 
+    seed = 2125)
+
+invisible("Se generó un oob mayor, y hubo más error de clasificación si controlaba por numero de ttos. previos y días en tto.")
+```
+El rendimiento predictivo se evaluó mediante la tasa de error fuera de bolsa (OOB), obteniendo una tasa de clasificación OOB de `r as.numeric(round(attr(data_long_est_24_std_imp_rec_imp,"oob")[[1]],3)*100)`%, que indica la capacidad predictiva del modelo para estimar correctamente los valores faltantes. 
+
+
+Posteriormente unimos previsión y tramo en `prev_benef` y generamos la categoría recodificada de acuerdo a nuestros intereses (agrupando tramos de FONASA en AB y CD y agrupamos FFAA e ISAPRE. Finalmente, luego de retroalimentación con los profesores, dejamos FFAA e ISAPRE diferenciados, y agrupamos los tramos de FONASA en A, BC y D. 
+
+
+```{r recodificar-prev-tramo}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+gc()
+
+data_long_est_24_std_imp_rec_imp$prev_benef<-
+  glue::glue("{factor(data_long_est_24_std_imp_rec_imp$glosa_prevision_rec)} {factor(data_long_est_24_std_imp_rec_imp$benef)}")
+data_long_est_24_std_imp_rec_imp$prev_benef_rec <-
+  car::recode(data_long_est_24_std_imp_rec_imp$prev_benef,
+              "'CAPREDENA NA'='ISAPRE/FFAA';'DIPRECA B'='ISAPRE/FFAA';'DIPRECA NA'='ISAPRE/FFAA';'FONASA NA'='FONASA AB';'FONASA A'='FONASA AB';'FONASA B'='FONASA AB';'FONASA C'='FONASA CD';'FONASA D'='FONASA CD';'FONASA NA'='FONASA AB';'NINGUNA NA'='FONASA AB';'ISAPRE B'='ISAPRE/FFAA';'ISAPRE NA'='ISAPRE/FFAA';'SISA NA'='ISAPRE/FFAA';'SISA NA'='ISAPRE/FFAA'")
+
+data_long_est_24_std_imp_rec_imp$prev_benef_rec_post <-
+  as.character(car::recode(data_long_est_24_std_imp_rec_imp$prev_benef,
+              "'CAPREDENA NA'='FFAA';'DIPRECA B'='FFAA';'DIPRECA NA'='FFAA';'FONASA NA'='FONASA A';'FONASA A'='FONASA A';'FONASA B'='FONASA BC';'FONASA C'='FONASA BC';'FONASA D'='FONASA D';'FONASA NA'='FONASA A';'NINGUNA NA'='FONASA A';'ISAPRE B'='ISAPRE';'ISAPRE NA'='ISAPRE';'SISA NA'='FFAA';'SISA NA'='FFAA'"))
+
+```
+
+## Niveles de cuidado
+
+Dado que la variable codificada `areaf_egr` no nos proporcionaba mucha información, añadimos en base al código los niveles de cuidado de cada área para obtener una descripción.
+
+```{r uno-niveles-de-cuidado}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+niv_cuidado<-
+  cbind.data.frame(Código = c(401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 330, 418, 419, 420, 421, 422, 423, 424, 425, 426, 427, 428, 429), 
+                   Descripción = c("Área Médica Adulto Cuidados Básicos", "Área Médica Adulto Cuidados Medios", "Área Médico-Quirúrgico Cuidados Básicos", "Área Médico-Quirúrgico Cuidados Medios", "Área Cuidados Intensivos Adultos", "Área Cuidados Intermedios Adultos", "Área Médica Pediátrica Cuidados Básicos", "Área Médica Pediátrica Cuidados Medios", "Área Médico-Quirúrgico Pediátrica Cuidados Básicos", "Área Médico-Quirúrgico Pediátrica Cuidados Medios", "Área Cuidados Intensivos Pediátricos", "Área Cuidados Intermedios Pediátricos", "Área Neonatología Cuidados Básicos", "Área Neonatología Cuidados Intensivos", "Área Neonatología Cuidados Intermedios", "Área Obstetricia", "Área Pensionado", "Área Psiquiatría Adulto Corta estadía", "Área Psiquiatría Adulto Mediana estadía", "Área Psiquiatría Adulto Larga estadía", "Área Psiquiatría Infanto-adolescente corta estadía", "Área Psiquiatría Infanto-adolescente mediana estadía", "Área Psiquiatría Forense Adulto evaluación e inicio tto.", "Área Psiquiatría Forense Adulto tratamiento", "Área Psiquiatría Forense Infanto Adolescente evaluación e inicio tto.", "Área Psiquiatría Forense Infanto Adolescente tratamiento", "Área Sociosanitaria Adulto", "Área de Hospitalización de Cuidados Intensivos en Psiquiatría Adulto", "Área de Hospitalización de Cuidados Intensivos en Psiquiatría Infanto Adolescente"))
+
+data_long_est_24_std_imp_rec_imp_areaf <-
+  data_long_est_24_std_imp_rec_imp|>
+    dplyr::left_join(niv_cuidado, by=c("areaf_egr"="Código"))|>
+  {\(df) if (nrow(df) > nrow(data_long_est_24_std_imp_rec_imp)) stop("left join added rows") else df}() |>
+  dplyr::rename("areaf_egr_glosa"="Descripción")
+```
+
+
+Generamos la variable `factor_inclusivo_real_hist_mas_autperc`. Esta es la combinación de registrar al menos un reporte MINSAL desde 2005 (dependiente del tiempo) o por el Registro Social de Hogares o CONADI (ambas vinculadas al paciente, independientes del tiempo). Lo que hace es dividir aquellos que son totalmente CONADI sean codificados como "11".
+
+```{r se-aniade-ppoo-historico}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+data_long_est_24_std_imp_rec_imp_areaf$factor_inclusivo_real_hist_mas_autperc<-
+factor(paste0(data_long_est_24_std_imp_rec_imp_areaf$inclusivo_real_historico, 
+              data_long_est_24_std_imp_rec_imp_areaf$ppo_conadi2))
+```
+
+
+En base a esta unión, nos preguntamos si alguno de los pacientes que aparecía en Neonatología se encontraba en la base de datos de nacimientos.
+
+```{r explora-nenota-en-bd-nac}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+if (env$nac_enc17_22 |>
+    filter(RUN %in% (filter(data_long_est_24_std_imp_rec_imp_areaf, grepl("Neonat", areaf_egr_glosa)) |>
+    distinct(run) |> pull())) |>  
+    nrow() == 0) {
+    
+    print("Resultó no haber pacientes en BD nacimientos: se elimina:")
+    rm(list = "nac_enc17_22", envir = env)  # Eliminación correcta
+    gc()
+}
+
+```
+
+No encontramos, por lo que decimidmos eliminar la base de datos. 
+
+Ahora exploramos edades en áreas:
+
+```{r explora-menores-areas-mayores-viceversa}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+message(paste0("Menos de 18 en área de adultos: ",
+               scales::percent(filter(data_long_est_24_std_imp_rec_imp_areaf, 
+                grepl("Adult", areaf_egr_glosa), edad_anos<18)|> nrow()/nrow(data_long_est_24_std_imp_rec_imp_areaf))
+               ))
+
+cat("Adultos que ingresan a áreas de adolescentes:")
+paste0("n= ", dplyr::filter(data_long_est_24_std_imp_rec_imp_areaf, grepl("Adoles", areaf_egr_glosa), edad_anos>=18)|> nrow())
+paste0("RUNs= ", dplyr::filter(data_long_est_24_std_imp_rec_imp_areaf, grepl("Adoles", areaf_egr_glosa), edad_anos>=18)|> distinct(run)|> nrow())
+
+if(data_long_est_24_std_imp_rec_imp_areaf|> filter(run %in%
+(data_long_est_24_std_imp_rec_imp_areaf|> filter(edad_anos<15)|> pull(run)))|> nrow()
+){stop("Pacientes menores de 15")}
+```
+
+Generamos una clasificación preliminar de las áreas en la variable `areaf_egr_glosa_rec`. En la nueva base de datos, descartamos a aquellas especialdiades que nod eberían ir
+
+```{r explora-recodificacion-area-eliminacion-neonat}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+data_long_est_24_std_imp_rec_imp_areaf_rec <- data_long_est_24_std_imp_rec_imp_areaf |> 
+  mutate(areaf_egr_glosa_rec= dplyr::case_when(areaf_egr_glosa=="Área Psiquiatría Adulto Corta estadía"~"alta_complejidad", #dudas
+                areaf_egr_glosa=="Área Médico-Quirúrgico Cuidados Básicos"~"med_baj_complejidad", #generalista
+                areaf_egr_glosa=="Área Médica Adulto Cuidados Básicos"~"med_baj_complejidad", #generalista
+                areaf_egr_glosa=="Área Obstetricia"~ "med_baj_complejidad", # menor complejidad, art. 1
+                areaf_egr_glosa=="Área Psiquiatría Infanto-adolescente corta estadía"~ "alta_complejidad", #dudas
+                areaf_egr_glosa=="Área Médico-Quirúrgico Cuidados Medios"~ "med_baj_complejidad", #generalista
+                areaf_egr_glosa=="Área Psiquiatría Adulto Larga estadía"~ "alta_complejidad", #dudas: tal vez requieran altos niveles de supervisión, junto con presentar inestabilidad psicopatológica crónica
+                areaf_egr_glosa=="Área Cuidados Intermedios Adultos"~ "med_baj_complejidad", 
+                areaf_egr_glosa=="Área Médica Adulto Cuidados Medios"~ "med_baj_complejidad",
+                areaf_egr_glosa=="Área Pensionado"~ "med_baj_complejidad", #residuo histórico, copago mayor, más cercano a médico-quirúrgico cuidados básicos
+                areaf_egr_glosa=="Área Psiquiatría Adulto Mediana estadía"~ "alta_complejidad",
+                areaf_egr_glosa=="Área Cuidados Intensivos Adultos"~ "alta_complejidad",
+                areaf_egr_glosa=="Área de Hospitalización de Cuidados Intensivos en Psiquiatría Adulto"~ "alta_complejidad",
+                areaf_egr_glosa=="Área Psiquiatría Forense Infanto Adolescente tratamiento"~ "alta_complejidad", #dudas
+                areaf_egr_glosa=="Área Médica Pediátrica Cuidados Básicos"~ "med_baj_complejidad", #+areas basicas, generalista
+                areaf_egr_glosa=="Área Médico-Quirúrgico Pediátrica Cuidados Básicos"~ "med_baj_complejidad", #+areas basicas, generalista
+                areaf_egr_glosa=="Área Cuidados Intermedios Pediátricos"~ "med_baj_complejidad",
+                areaf_egr_glosa=="Área Médico-Quirúrgico Pediátrica Cuidados Medios"~ "med_baj_complejidad",
+                areaf_egr_glosa=="Área Psiquiatría Forense Adulto evaluación e inicio tto."~ "alta_complejidad", #dudas
+                areaf_egr_glosa=="Área Médica Pediátrica Cuidados Medios"~ "med_baj_complejidad",
+                areaf_egr_glosa=="Área Cuidados Intensivos Pediátricos"~ "alta_complejidad",
+                areaf_egr_glosa=="Área de Hospitalización de Cuidados Intensivos en Psiquiatría Infanto Adolescente"~ "alta_complejidad",
+                areaf_egr_glosa=="Área Neonatología Cuidados Básicos"~ "descartar",
+                areaf_egr_glosa=="Área Psiquiatría Forense Adulto tratamiento"~ "alta_complejidad",
+                areaf_egr_glosa=="Área Psiquiatría Infanto-adolescente mediana estadía"~ "alta_complejidad", #dudas
+                areaf_egr_glosa=="Área Neonatología Cuidados Intermedios"~ "med_baj_complejidad", #dudas
+                areaf_egr_glosa=="Área Sociosanitaria Adulto"~ "med_baj_complejidad", #ej., demencia señil; más parecido a una cama básica
+                T~""
+                )) |> 
+    (\(df) {
+    print(cat(paste0("Base de datos antes de descartar Neonatología Cuidados Básicos, Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("Base de datos antes de descartar Neonatología Cuidados Básicos, RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()|> 
+  filter(areaf_egr_glosa_rec!="descartar") |> #Neonatología Cuidados Básicos
+    (\(df) {
+    print(cat(paste0("Base de datos después de descartar Neonatología Cuidados Básicos, Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("Base de datos después de descartar Neonatología Cuidados Básicos, RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()|>
+  {\(df) if (nrow(df) > nrow(data_long_est_24_std_imp_rec_imp_areaf)) stop("added rows") else df}()
+
+```
+
+La base de datos resultante es `data_long_est_24_std_imp_rec_imp_areaf_rec`.
+
+
+Llama la atención que los códigos de atención con un nivel de atención "No aplica" son principalmente Clínicas privadas, o Pensiado San José. Hicimos una variable para clasificar la combinación del nivel de atención, complejidad y el área de atención: `code_niv_at_mod_area_compl`.
+
+```{r explora-recodificacion-area-combinacion-niv-atencion-complejidad}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+
+data_long_est_24_std_imp_rec_imp_areaf_rec_cod<-
+data_long_est_24_std_imp_rec_imp_areaf_rec |> 
+  mutate(code_niv_at_mod_area_compl= case_when(
+    grepl("Terciario", nivel_de_atencion)& 
+    grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="alta_complejidad"~ "Terciario-inst alta-area alta",
+    grepl("Terciario", nivel_de_atencion)& 
+    grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="med_baj_complejidad"~ "Terciario-inst alta-area med/baja",
+    
+    grepl("Terciario", nivel_de_atencion)& 
+    !grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="alta_complejidad"~ "Terciario-inst med/baja-area alta",
+    grepl("Terciario", nivel_de_atencion)& 
+    !grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="med_baj_complejidad"~ "Terciario-inst med/baja-area med/baja",   
+
+    
+    grepl("Secundario", nivel_de_atencion)& 
+    grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="alta_complejidad"~ "Primario/secundario-inst alta-area alta",
+    grepl("Secundario", nivel_de_atencion)& 
+    grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="med_baj_complejidad"~ "Primario/secundario-inst alta-area med/baja",
+    
+    grepl("Secundario", nivel_de_atencion)& 
+    !grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="alta_complejidad"~ "Primario/secundario-inst med/baja-area alta",
+    grepl("Secundario", nivel_de_atencion)& 
+    !grepl("Alta",nivel_de_complejidad) &
+    areaf_egr_glosa_rec=="med_baj_complejidad"~ "Primario/secundario-inst alta-area med/baja",   
+    
+    
+    grepl("No Aplica|Pendiente", nivel_de_atencion)& 
+      grepl("Alta",nivel_de_complejidad) &
+      areaf_egr_glosa_rec=="alta_complejidad"~ "No aplica/pendiente-inst alta-area alta",
+    grepl("No Aplica|Pendiente", nivel_de_atencion)& 
+      grepl("Alta",nivel_de_complejidad) &
+      areaf_egr_glosa_rec=="med_baj_complejidad"~ "No aplica/pendiente-inst alta-area med/baja",
+    
+    grepl("No Aplica|Pendiente", nivel_de_atencion)& 
+      !grepl("Alta",nivel_de_complejidad) &
+      areaf_egr_glosa_rec=="alta_complejidad"~ "No aplica/pendiente-inst med/baja-area alta",
+    grepl("No Aplica|Pendiente", nivel_de_atencion)& 
+      !grepl("Alta",nivel_de_complejidad) &
+      areaf_egr_glosa_rec=="med_baj_complejidad"~ "No aplica/pendiente-inst alta-area med/baja"
+                   )) |> 
+  
+    mutate(nivel_de_atencion_rec= case_when(
+    grepl("Terciario", nivel_de_atencion)~ "3. Terciario",
+    grepl("Secundario", nivel_de_atencion)~ "2. Secundario",
+    grepl("No Aplica|Pendiente", nivel_de_atencion)~ "1. No aplica/pendiente",
+    T~ nivel_de_atencion)) |> 
+    mutate(nivel_de_complejidad_rec= case_when(
+    grepl("Alta", nivel_de_complejidad)~ "Alta",
+    !grepl("Alta", nivel_de_complejidad)~ "Media-baja"))|> #Neonatología Cuidados Básicos
+    (\(df) {
+    print(cat(paste0("Base de datos después de descartar Neonatología Cuidados Básicos, Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("Base de datos después de descartar Neonatología Cuidados Básicos, RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()
+```
+
+Seguimos conservando pacientes duplicados al menos en RUN, fecha de ingreso y fecha de egreso.
+
+```{r exploracion-pacientes-duplicados}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+paste0("Pacientes duplicados: ",
+       data_long_est_24_std_imp_rec_imp_areaf_rec_cod |> 
+         janitor::get_dupes(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt) |> 
+         dplyr::distinct(run) |> nrow(),
+       "; eventos: ",
+       data_long_est_24_std_imp_rec_imp_areaf_rec_cod |>  
+         janitor::get_dupes(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt)  |>  
+         nrow()
+) #
+paste0("Pacientes duplicados, AHORA INCLUYENDO INSTITUCION: ",
+       data_long_est_24_std_imp_rec_imp_areaf_rec_cod |>  
+         janitor::get_dupes(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt, ESTAB_HOMO) |>  
+        distinct(run) |> nrow(),
+       "; eventos: ",
+       data_long_est_24_std_imp_rec_imp_areaf_rec_cod |>  
+         janitor::get_dupes(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt, ESTAB_HOMO) |> 
+         nrow()
+)#[1] "Pacientes duplicados, AHORA INCLUYENDO INSTITUCION: 1; eventos: 4"
+
+data_long_est_24_std_imp_rec_imp_areaf_rec_cod_25<-
+  data_long_est_24_std_imp_rec_imp_areaf_rec_cod |> 
+  group_by(run, fecha_ingreso_rec_fmt, fecha_egreso_rec_fmt, ESTAB_HOMO) |> 
+  mutate(rn_dup= row_number(),n_dup=n()) |> 
+  ungroup() |> 
+  filter(case_when(n_dup>1& rn_dup<4~F,T~T))|> #Neonatología Cuidados Básicos
+    (\(df) {
+    print(cat(paste0("Base de datos después de descartar duplicados, Obs: ", formatC(nrow(df), big.mark="."), "\n")))
+    print(cat(paste0("Base de datos después de descartar duplicados, RUNs: ", formatC(distinct(df, run)|> nrow(), big.mark="."), "\n")))
+    df
+  })()
+```
+
+Por confidencialidad no puedo plasmar el caso aquí, pero se decidió conservar sólo el último registro ya que tenía información repetida en todo (ingresó a una clínica por  F32.2 Episodio depresivo grave sin síntomas psicóticos y con la misma edad, aunque en un registro figuró en FONASA B y en otro en ISAPRE). En base a esto se conservó el valor con ISAPRE.
+
+
+<br>
+
+# 2. Formato SSA
+
+## 2.1. Formatear y generar esqueleto para base de datos
+
+Ordenamos los tratamientos por RUN y fecha de egreso (de más antiguo a reciente), generamos la fecha de ingreso y egreso retrasada (*lagged*). La base `df_filled`.
+
+```{r ssa-formato-base}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+
+df_filled <- 
+  data_long_est_24_std_imp_rec_imp_areaf_rec_cod_25|>
+  arrange(run, min_fecha_egreso_rec24_num, fecha_egreso_rec24_num)|> 
+  group_by(run)|> 
+  mutate(tto= row_number())|> 
+  mutate(lag_fecha_egreso_rec_num= lag(unclass(as.Date(fecha_egreso_rec)), default= unclass(as.Date("2017-12-01"))))|>
+  mutate(lag_fecha_ingreso_rec_num= lag(unclass(as.Date(fecha_ingreso_rec)), default= unclass(as.Date("2017-12-01"))))|> 
+  ungroup()|>
+    (\(df) {
+    print(cat(paste0("Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+```
+
+
+Generar las bases de datos para poblar (con "expand.grid"). Restringimos a los años de interés (2018 a 2022), usando el rezago del mes o el trimestre anterior de las fechas. Los elementos son el RUN (en base a nuestra base original `df_filled`), y meses/trimestres que hay entre 2018 y 2022.
+
+```{r ssa-formato-base2-grid}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+invisible("Mensual")
+expand_df_month_run<-
+expand.grid(run = unique(df_filled$run), month = paste(rep(paste0("20",18:22),each=12),1:12, sep="-"))|> 
+  arrange(run)|> 
+  mutate(date_num= unclass(as.Date(paste0(month,"-01"))))|> 
+  group_by(run)|> 
+  mutate(date_num_lead= lead(date_num, default=unclass(as.Date("2023-01-01"))))|> 
+  ungroup()
+
+invisible("Trimestral")
+expand_df_quarter_run<-
+expand.grid(run = unique(df_filled$run), quarter = paste(rep(paste0("20",18:22),each=4),1:4, sep="."))|>
+  arrange(run)|> 
+  mutate(date_num= unclass(lubridate::yq(quarter)))|> 
+  group_by(run)|> 
+  mutate(date_num_lead= lead(date_num, default=unclass(as.Date("2023-01-01"))))|> 
+  ungroup()
+
+paste0("Combinación RUN y mes, celdas: ",formatC(nrow(expand_df_month_run), big.mark="."))
+# 397,680 antes era 362460
+paste0("Combinación RUN y trimestre, celdas: ",formatC(nrow(expand_df_quarter_run), big.mark="."))
+# 132,560 antes era 120800
+```
+
+Al esqueleto de la base de datos a poblar debe tener una operación -1 en el mes o el trimestre (para que parta en 0). 
+
+```{r ssa-formato-base2-grid-expansion}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+
+invisible("Mensual")
+expand_df_month_run_t_desde_primera_adm<-
+  #debo sacarle un dígito al recuento porque la gente parte desde un tiempo 0 (primera admisión)
+  expand.grid(run = unique(df_filled$run), 
+              month = 0:(length(paste(rep(paste0("20",18:22),each=12),1:12, sep="-"))-1))|> 
+  arrange(run)|> 
+  ungroup()
+
+invisible("Trimestral")
+expand_df_quarter_run_t_desde_primera_adm<-
+  #debo sacarle un dígito al recuento porque la gente parte desde un tiempo 0 (primera admisión)
+  expand.grid(run = unique(df_filled$run), 
+              quarter = 0:(length(paste(rep(paste0("20",18:22),each=4),1:4, sep="."))-1))|> 
+  arrange(run)|> 
+  ungroup()
+```
+
+## 2.2. Poblar la base nueva para alfabeto
+
+Para ello, seleccionamos nuestras variables de interés.
+
+- RUN
+
+- Fecha de ingreso
+
+- Fecha de egreso
+
+- Alfabeto
+
+- Diagnósticos CIE-10 del 1 al 11
+
+
+```{r ssa-poblar}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: hold
+
+
+invisible("Base original")
+dt_df_filled<- as_tidytable(mutate(df_filled, rn= row_number())|> 
+      select(run, fecha_ingreso_rec24_num, fecha_egreso_rec24_num, 
+                   days_elapsed, alphabet, rn, paste0("diag",1:11,"_rec32")))|>  
+      select(run, fecha_ingreso_rec24_num, fecha_egreso_rec24_num, alphabet, paste0("diag",1:11,"_rec32"))
+
+```
+
+Posteriormente, eliminamos los que tuvieron un primer registro Otros (no rel. TSM/TUS) antes de presentar diagnóstico rel. con TSM/TUS entre 2018 y 2022 (base `dt_df_filled2`).
+
+```{r ssa-poblar-primer-evento-sm-tus}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+dt_df_filled2<-
+dt_df_filled |>
+    (\(df) {
+    print(cat(paste0("Antes de eliminar first-Otros, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Antes de eliminar first-Otros, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+    })()|> 
+  arrange(run, fecha_ingreso_rec24_num, fecha_egreso_rec24_num)|> 
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  # 11,577 × 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,542 × 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,537 × 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,536 × 18  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,535 x 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>    
+    (\(df) {
+    print(cat(paste0("Después de eliminar first-Otros, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Después de eliminar first-Otros, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+  #11,535 x 18  
+  #
+#bd0c2f8dcc5209831487342eda88d0b0461c98150911e36b64b4055a846a3631
+#ef1193767a2df73d6fdb1dd59d35edce262a9031d9ca5b012a11d088081b746e
+#78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+```
+Lo replicamos también para nuestra base original `df_filled`, ahora llamada `df_filled2`
+
+```{r ssa-poblar-primer-evento-sm-tus-base-orig}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+df_filled2 <- 
+  as_tidytable(data_long_est_24_std_imp_rec_imp_areaf_rec_cod_25)|>
+    (\(df) {
+    print(cat(paste0("Antes de eliminar first-Otros, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Antes de eliminar first-Otros, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+    })()|> 
+  arrange(run, min_fecha_egreso_rec24_num, fecha_egreso_rec24_num)|> 
+  group_by(run)|> 
+  mutate(tto= row_number())|> 
+  mutate(lag_fecha_egreso_rec_num= lag(unclass(as.Date(fecha_egreso_rec)), default= unclass(as.Date("2017-12-01"))))|>
+  mutate(lag_fecha_ingreso_rec_num= lag(unclass(as.Date(fecha_ingreso_rec)), default= unclass(as.Date("2017-12-01"))))|> 
+  ungroup()|> 
+  arrange(run, fecha_ingreso_rec24_num, fecha_egreso_rec24_num)|> 
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  # 11,577 × 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,542 × 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,537 × 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,536 × 18  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|> 
+  #11,535 x 18
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>    
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>  
+  group_by(run)|> 
+  mutate(run_n= n(), run_rn= row_number())|> 
+  ungroup()|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T)) |>    
+    (\(df) {
+    print(cat(paste0("Después de eliminar first-Otros, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Después de eliminar first-Otros, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })() 
+# Antes de eliminar first-Otros, Obs: 14.027
+# Antes de eliminar first-Otros, RUNs: 6.628
+# Después de eliminar first-Otros, Obs: 13.235
+# Después de eliminar first-Otros, RUNs: 6.626
+```
+
+Los dos HASHs que se eliminan responden a usuarias que presentaban diagnósticos relacionados con TSM/TUS se encontraban en un área descartada (Área Neonatología Cuidados Básicos). Por tanto, los diagnósticos sobrantes y únicos de est@s pacientes, corresponden a diagnósticos "Otros", razón por la cual son descartados.
+
+Por tanto, esto debemos corregirlo en las bases de datos de esqueleto.
+
+```{r ssa-formato-base2-grid-post-descarte-casos-errrones}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+invisible("Mensual")
+expand_df_month_run_t_desde_primera_adm<-
+  expand_df_month_run_t_desde_primera_adm |> 
+  filter( run %in% df_filled2$run)
+
+invisible("Trimestral")
+expand_df_quarter_run_t_desde_primera_adm<-
+  expand_df_quarter_run_t_desde_primera_adm|> 
+  filter( run %in% df_filled2$run)
+```
+
+### 2.2.2. Unir mortalidad
+
+Añadimos los datos de mortalidad a la base de interés, nombrándola como `dt_df_filled3`.
+
+```{r ssa-poblar-unir-mortalidad}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+paste0("Número de RUNs distintos en bases de datos de mortalidad: ", 
+data_long_est_24_std_imp_rec_imp_areaf_rec_cod_25 |> 
+  distinct(run) |> 
+  filter(run %in% unique(c(env$def_enc17_21$RUN))) %>% 
+  nrow())
+
+dt_df_filled3<- 
+  dt_df_filled2|> 
+  filter(case_when(alphabet=="otro" & run_rn==1~F,T~T))|>
+    (\(df) {
+    print(cat(paste0("Antes de unir con mortalidad, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Antes de unir con mortalidad, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })() |> 
+  left_join(janitor::clean_names(env$def_enc17_21[,c("RUN", "FECHA_DEF")]), by="run")|>
+    (\(df) {
+    print(cat(paste0("Después de unir con mortalidad, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Después de unir con mortalidad, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()  
+```
+
+### 2.2.3. Grilla-tiempo, expansión longitudinal episodios de hsopitalización
+
+#### 2.2.3.a. Mensual
+
+Primero lo hacemos para la base de datos con resolución mensual.
+
+- Añadimos un identificador de fila (rn)
+
+- Unimos información de defunciones
+
+- Seleccionamos sólo columnas de interés: RUN, Edad (`edad_anos`), pertenencia a pueblos originarios reportada en cada hospitalización MINSAL y en formato binario (`pueblo_originario_01`), previsión y tramo (recodificación propuesta luego de retroalimentación `prev_benef_rec_post`), fecha de ingreso en formato numérico (`fecha_ingreso_rec24_num`) y de egreso (`fecha_egreso_rec24_num`), pertenencia/reconocimiento perteneciente a PPOO (criterio inclusivo, `factor_inclusivo_real_hist_mas_autperc`), sexo (`glosa_sexo`), fecha de defunción (`fecha_def`), días en tratamiento (`days_elapsed`), alfabeto de estados (`alphabet`), suma de diagnósticos de autolesiones (`sum_autolesiones`), código de región del establecimiento hospitalización (`codigo_region`), código de establecimiento hospitalización (`ESTAB_HOMO`),  identificador de fila (`rn`) y diagnósticos recodificados de acuerdo al alfabeto (terminados en `_rec32` del primero al onceavo).
+
+- Por cada RUN, se obtiene la fecha mínima de ingreso (`min_fecha_ingreso_rec24_num`)
+
+- Asumiendo que un mes se obtiene mediante el denominador 30.436875, se obtuvo la variable `month_ing2` que indica el tiempo transcurrido en MESES de cada ingreso, desde el primer ingreso por cada usuario. Adicionalmente, si la fecha de egreso es la misma que la de ingreso, se le añade a los meses desde el primer ingreso (`month_egr2`) 0.0001 para que no haya superposición; de lo contrario, se calcula mediante la diferencia de la fecha de egreso con la del primer ingreso, todo eso dividido por 30.436875 para escalarlo a meses. También se calcula los meses hasta la censura (`cens_time`) y los meses hasta el fallecimiento (`death_time`) desde el primer ingreso, también divididos por la constante para escalarlo a meses.
+
+- Las variables `month_ing` y `month_egr` definen el mes de seguimiento base (ej., 1.23 se traduce en 1 mes desde el primer ingreso). Esto permite su posterior ubicación en la grilla-tiempo. la actualización del año 2025, incorpora `cond_egr`.
+
+
+```{r mensual-sel-vars-formato-tiempo-desde-primera-adm}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+dt_df_filled_month_t_desde_primera_adm<- 
+  as_tidytable(mutate(df_filled2, rn= row_number()))|> 
+  left_join(janitor::clean_names(env$def_enc17_21[,c("RUN", "FECHA_DEF")]), by="run") |>
+  mutate(fecha_def= as.Date.character(fecha_def, format="%d-%m-%Y"))|> #janitor::tabyl(fecha_def)
+  select(run, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post, fecha_ingreso_rec24_num, fecha_egreso_rec24_num, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, fecha_def, days_elapsed, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, rn, paste0("diag",1:11,"_rec32"), cond_egr) |> 
+  select(run, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, fecha_def, days_elapsed, fecha_ingreso_rec24_num, fecha_egreso_rec24_num, alphabet, codigo_region, ESTAB_HOMO, sum_autolesiones, rn, paste0("diag",1:11,"_rec32"), cond_egr) |> 
+  group_by(run) |> 
+  mutate(min_fecha_ingreso_rec24_num= min(fecha_ingreso_rec24_num, na.rm=T)) |> 
+  ungroup() |> 
+  mutate(month_ing2 = (fecha_ingreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875) |> 
+  mutate(month_egr2 = ifelse((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875==month_ing2, 
+                            ((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875)+0.0001,
+                            ((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875))) |> 
+  # mutate(month_ing = ceiling((fecha_ingreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875)) |> 
+  # mutate(month_egr = ceiling((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875)) |> 
+  mutate(month_ing = floor((fecha_ingreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875)) |> 
+  mutate(month_egr = floor((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 30.436875)) |> 
+  mutate(cens_time= (unclass(as.Date("2023-01-01"))-min_fecha_ingreso_rec24_num) / 30.436875) |> 
+  mutate(death_time= (unclass(as.Date(fecha_def))-min_fecha_ingreso_rec24_num) / 30.436875) |>
+  #mutate(comb = paste0(run, "_", rn)) |>
+  select(run, edad_anos, min_edad_anos, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post, cens_time, death_time, month_ing, month_ing2, month_egr, month_egr2, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, days_elapsed, paste0("diag",1:11,"_rec32"), cond_egr)|>  #comb, 
+    (\(df) {
+    print(cat(paste0("Antes de unir con mortalidad, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Antes de unir con mortalidad, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+```
+
+Generamos para cada episodio hospitalario una columna llamada "month" que contiene los meses desde el primer ingreso que abarca cada fila por cada usuario. De tal manera que si un paciente se encuentra, por ejemplo, 0,3 meses en un tratamiento relacionado con TSM y es su primero, este aparecerá sólo una vez con la fecha de month_egr 0. Si luego este reingresa por otras causas y se encuentra desde el mes 1.68 hasta el 2.27 desde el primer ingreso quedará asignado para los meses 1 y 2 (month_egr). Esto se reflejará en que este tratamiento pasará a replicarse en otra fila.
+
+```{r mensual-expandir-tratamientos-a-grilla-tiempo-desde-primera-adm}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+dt_df_filled_month_t_desde_primera_adm_expand<- 
+  dt_df_filled_month_t_desde_primera_adm|>
+  rowwise()|>
+  mutate(month = list(seq(from = month_ing, to = month_egr)))|>
+  unnest(month) |> #unnest(cols = month)|>  version mas nueva de dplyr tolera este argumento así
+  select(run, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post, cens_time, death_time, month, month_ing, month_ing2, month_egr, month_egr2, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, days_elapsed, paste0("diag",1:11,"_rec32"), cond_egr)|>  #comb, 
+    (\(df) {
+    print(cat(paste0("Despues de expansión por cada grilla-tiempo desde primera adm., Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Despues de expansión por cada grilla-tiempo desde primera adm., RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+print("última fecha de egreso (en meses desde la primera admisión)")
+max(dt_df_filled_month_t_desde_primera_adm_expand$month_egr2)
+```
+
+#### 2.2.3.b. Trimestral
+
+Hacemos lo mismo para la base con formato de seguimiento trimestral. Eso si, ahora el denominador para llevar los días a trimestres es 91.31063.
+
+```{r trim-sel-vars-formato-tiempo-desde-primera-adm}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+dt_df_filled_quarter_t_desde_primera_adm<- 
+  as_tidytable(mutate(df_filled2, rn= row_number()))|> 
+  left_join(janitor::clean_names(env$def_enc17_21[,c("RUN", "FECHA_DEF")]), by="run") |>
+  mutate(fecha_def= as.Date.character(fecha_def, format="%d-%m-%Y"))|>#janitor::tabyl(fecha_def)
+  select(run, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post,
+                fecha_ingreso_rec24_num, fecha_egreso_rec24_num, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, fecha_def, days_elapsed, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, rn, paste0("diag",1:11,"_rec32"), cond_egr)|>
+  select(run, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post,  fecha_def, days_elapsed, fecha_ingreso_rec24_num, fecha_egreso_rec24_num, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, rn, paste0("diag",1:11,"_rec32"), cond_egr) |> 
+  group_by(run) |> 
+  mutate(min_fecha_ingreso_rec24_num= min(fecha_ingreso_rec24_num, na.rm=T)) |> 
+  ungroup() |> 
+  mutate(quarter_ing2 = (fecha_ingreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063) |> 
+  mutate(quarter_egr2 = ifelse((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063==quarter_ing2, 
+                                      ((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063)+0.0001,
+                                      ((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063))) |> 
+  # mutate(quarter_ing = ceiling((fecha_ingreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063)) |> 
+  # mutate(quarter_egr = ceiling((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063)) |> 
+  mutate(quarter_ing = floor((fecha_ingreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063)) |> 
+  mutate(quarter_egr = floor((fecha_egreso_rec24_num - min_fecha_ingreso_rec24_num) / 91.31063)) |> 
+  mutate(cens_time= (unclass(as.Date("2023-01-01"))-min_fecha_ingreso_rec24_num)/ 91.31063) |> 
+  mutate(death_time= (unclass(as.Date(fecha_def))-min_fecha_ingreso_rec24_num) / 91.31063) |>
+  #mutate(comb = paste0(run, "_", rn)) |>
+  select(run, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post, cens_time, death_time, quarter_ing, quarter_ing2, quarter_egr, quarter_egr2, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, days_elapsed, paste0("diag",1:11,"_rec32"), cond_egr)|>  #comb, 
+    (\(df) {
+    print(cat(paste0("Antes de unir con mortalidad, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Antes de unir con mortalidad, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+``` 
+
+Generamos la columna "quarter" para cada trimestre.
+
+```{r trim-expandir-tratamientos-a-grilla-tiempo-desde-primera-adm}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+dt_df_filled_quarter_t_desde_primera_adm_expand<- 
+dt_df_filled_quarter_t_desde_primera_adm |> 
+  rowwise() |> 
+  mutate(quarter = list(seq(from = quarter_ing, to = quarter_egr))) |> 
+  unnest(quarter) |> 
+  select(run, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, edad_anos, min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post, cens_time, death_time, quarter, quarter_ing, quarter_ing2, quarter_egr, quarter_egr2, alphabet, sum_autolesiones, codigo_region, ESTAB_HOMO, days_elapsed, paste0("diag",1:11,"_rec32"), cond_egr)|>  #comb, 
+    (\(df) {
+    print(cat(paste0("Despues de expansión por cada grilla-tiempo desde primera adm., Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Despues de expansión por cada grilla-tiempo desde primera adm., RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+
+print("última fecha de egreso (en trimestres desde la primera admisión)")
+max(dt_df_filled_quarter_t_desde_primera_adm_expand$quarter_egr2)
+```
+
+<br>
+
+### 2.2.4. Unión esqueleto con RUN-meses con base de datos con eventos por 
+
+#### 2.2.4. Mensual
+
+Unimos la base de datos esqueleto (`expand_df_month_run_t_desde_primera_adm`) con la base de datos con los datos reales (`dt_df_filled_month_t_desde_primera_adm_expand`).
+
+- Si el estado (alfabeto) está vacío, entonces se reemplaza con "AUS" (ausente)
+- Ordenamos la base por RUN y mes de seguimiento
+- Agrupamos observaciones por esa combinación
+- Contamos el número de observaciones por combinación
+- Seleccionamos aquellas que tienen más de una
+
+
+```{r mes-sqldf-esqueleto-datos-concretos}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+ing_calendar_month_t_desde_primera_adm <- janitor::clean_names(sqldf::sqldf("SELECT *
+      FROM expand_df_month_run_t_desde_primera_adm AS x  
+      LEFT JOIN dt_df_filled_month_t_desde_primera_adm_expand AS y 
+      ON x.run = y.run 
+      AND x.month = y.month
+"))
+
+message(paste0("Se añadieron ", formatC(nrow(ing_calendar_month_t_desde_primera_adm)-nrow(expand_df_month_run_t_desde_primera_adm), big.mark="."), " filas"))
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+invisible("exploración duplicados")
+ing_calendar_month_t_desde_primera_adm_dup<-
+  as_tidytable(ing_calendar_month_t_desde_primera_adm) |> 
+  select(-run_2) |>  #, fecha_ingreso_rec24_num, fecha_egreso_rec24_num) %>% 
+  mutate(alphabet= ifelse(is.na(alphabet),"AUS", alphabet)) |> 
+  arrange(run, month) |>  
+  group_by(run, month)  |>  
+  mutate(n_dup= n()) |>  
+  ungroup() |>  
+  filter(n_dup>1) |>    (\(df) {
+    print(cat(paste0("Más de un evento hospitalario por RUN-mes, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Más de un evento hospitalario por RUN-mes, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+invisible("Caso con la mayor cantidad de eventos hospitalarios por mes")
+ing_calendar_month_t_desde_primera_adm_dup |> 
+  filter(n_dup==max(n_dup)) |> 
+  select(run, month, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, edad_anos,
+                min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post,
+                cens_time, month_ing2, month_egr2, alphabet, sum_autolesiones, days_elapsed, diag1_rec32, diag2_rec32)  |> 
+  mutate(across(c("cens_time", "month_ing2", "month_egr2"),~sprintf("%1.2f",.))) |> 
+    (\(df) {
+    View(df)
+    knitr::kable(mutate(df, run=as.numeric(factor(run))), "markdown", caption= "Caso con la mayor cantidad de eventos hospitalarios por mes") |> print()
+    rio::export(df, file="_output/month_dup_max.xlsx")  
+  })()
+
+invisible("Si interesa mirar en mayor profundidad")
+#df_filled2 |> filter(run==ing_calendar_month_t_desde_primera_adm_dup |> filter(n_dup==max(n_dup)) |> distinct(run) |> pull(run)) |> View()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:  
+ing_calendar_month_t_desde_primera_adm_dup |> 
+  distinct(run, month, n_dup) %>% pull(n_dup) |>  
+  (\(df) {
+    hist(df, main= "Histograma de frecuencias de eventos hospitalarios por RUN-mes", xlab= "N° eventos por RUN-mes")
+    print(summary(df))
+  })() # super similar a la base 2024
+```
+
+
+#### 2.2.4. Trimestral
+
+Se replica con la base de datos trimestral.
+
+```{r trim-sqldf-esqueleto-datos-concretos}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+ing_calendar_quarter_t_desde_primera_adm <- janitor::clean_names(sqldf::sqldf("SELECT *
+      FROM expand_df_quarter_run_t_desde_primera_adm AS x  
+      LEFT JOIN dt_df_filled_quarter_t_desde_primera_adm_expand AS y 
+      ON x.run = y.run 
+      AND x.quarter = y.quarter
+"))
+message(paste0("Se añadieron ", formatC(nrow(ing_calendar_quarter_t_desde_primera_adm)-nrow(expand_df_quarter_run_t_desde_primera_adm), big.mark="."), " filas"))
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("exploración duplicados")
+ing_calendar_quarter_t_desde_primera_adm_dup<-
+  as_tidytable(ing_calendar_quarter_t_desde_primera_adm) |> 
+  select(-run_2) |>  #, fecha_ingreso_rec24_num, fecha_egreso_rec24_num) %>% 
+  mutate(alphabet= ifelse(is.na(alphabet),"AUS", alphabet)) |> 
+  arrange(run, quarter) |>  
+  group_by(run, quarter)  |>  
+  mutate(n_dup= n()) |>  
+  ungroup() |>  
+  filter(n_dup>1) |>    
+  (\(df) {
+    print(cat(paste0("Más de un evento hospitalario por RUN-trim, Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Más de un evento hospitalario por RUN-trim, RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+invisible("Caso con la mayor cantidad de eventos hospitalarios por mes")
+ing_calendar_quarter_t_desde_primera_adm_dup |> 
+  filter(n_dup==max(n_dup)) |> 
+  select(run, quarter, factor_inclusivo_real_hist_mas_autperc, glosa_sexo, edad_anos,
+                min_edad_anos, pueblo_originario_01, inclusivo_real_historico, prev_benef_rec_post,
+                cens_time, quarter_ing2, quarter_egr2, alphabet, sum_autolesiones, days_elapsed, diag1_rec32, diag2_rec32)|> 
+  mutate(across(c("cens_time", "quarter_ing2", "quarter_egr2"),~sprintf("%1.2f",.))) |> 
+    (\(df) {
+    View(df)
+    knitr::kable(mutate(df, run=as.numeric(factor(run))), "markdown", caption= "Caso con la mayor cantidad de eventos hospitalarios por trimestre") |> print()
+    rio::export(df, file="_output/quarter_dup_max.xlsx")  
+  })()
+
+invisible("Si interesa mirar en mayor profundidad")
+#df_filled2 |> filter(run==ing_calendar_quarter_t_desde_primera_adm_dup |> filter(n_dup==max(n_dup)) |> distinct(run) |> pull(run)) |> View()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:  
+ing_calendar_quarter_t_desde_primera_adm_dup|> 
+  distinct(run, quarter, n_dup) %>% pull(n_dup)|>  
+  (\(df) {
+    hist(df, main= "Histograma de frecuencias de eventos hospitalarios por RUN-trimestre", xlab= "N° eventos por RUN-trimestre")
+    print(summary(df))
+  })() # super similar a la base 2024
+```
+
+### 2.2.5. Agrupación de eventos para definir una estructura RUN-tiempo 1:1
+
+Definimos la base de datos `dt_ing_calendar_month_t_desde_primera_adm` (en formato data.table) para llevar a cabo de manera eficiente la suma de alfabetos por cada paciente. Suma cada evento siempre run_2 se encuentre disponible (hubiese unión del esqueleto con datos reales) para esa combinación RUN-mes.
+
+Posteriormente, 
+
+- calculamos la variable delta= 
+
+- `codigo_region_rec`= RM vs. no-RM
+
+- código de establecimiento lo dejamos en formato caracter `estab_homo`
+
+- Y variables anidadas por RUN (invariantes a paciente): 
+
+  - Edad más antigua en años `min_edad_anos`
+  
+  - Pueblo originario binario (0/1=reporta) fuente MINSAL `pueblo_originario_01`
+  
+  - Pertenencia/reconocimiento PPOO histórico e inclusivo `factor_inclusivo_real_hist_mas_autperc`
+  
+  - Tiempo desde la primera admisión hasta la censura `cens_time`
+  
+  - Tiempo desde la primera admisión hasta el fallecimiento `death_time`
+  
+  - Atendido en RM vs. no-RM en la primera admisión de 2018 `codigo_region_rec_base`
+  
+  - Código establecimiento primer evento hospitalario de 2018 `estab_homo_base`
+  
+- Luego, se consolidó un resumen para cada combinación RUN-mes (summarise) con las siguientes variables:
+
+  - `sum_tus2`= suma de eventos hospitalarios vinculados a diagnośticos TUS
+  
+  - `sum_coc2`= suma de eventos hospitalarios vinculados a diagnośticos relacionados con trastornos por uso de cocaína
+  
+  - `sum_mar2`= suma de eventos hospitalarios vinculados a diagnośticos relacionados con trastornos por uso de marihuana
+  
+  - `sum_oh2`= suma de eventos hospitalarios vinculados a diagnośticos relacionados con trastornos por uso de alcohol
+  
+  - `sum_tus_psy2`= suma de eventos hospitalarios vinculados a diagnośticos relacionados con TUS o TSM
+  
+  - `alphabet_comb`= concatenar alfabeto
+  
+  . `delta_comb`= concatenar delta
+  
+  - `n_dup`= número de eventos por cada combinación RUN-mes
+  
+  - `min_edad_anos`= edad más antigua en años
+  
+  - `pueblo_originario_01`= pueblo originario binario (0/1=reporta) fuente MINSAL 
+  
+  - `inclusivo_real_historico`= si un paciente posee registros MINSAL desde 2005 o por el registro social de hogares o CONADI (binario, no diferencia)
+  
+  - `prev_benef_rec_post`= combinación de previsión y tramo (posterior a retroalimentación)
+  
+  - `glosa_sexo`= sexo
+  
+  - `factor_inclusivo_real_hist_mas_autperc`= variable que diferencia reportes a MINSAL históricos o registro social de hogares y CONADI (tres opciones)
+  
+  - `cens_time`= Promedio del tiempo desde la primera admisión a la censura (como es invariante a pacientes, debiese ser el mismo)
+  
+  - `death_time`= Promedio del tiempo desde la primera admisión al fallecimiento (como es invariante a pacientes, debiese ser el mismo)
+  
+  - `codigo_region_rec_base`= RM vs. no-RM de la primera hospitalización del 2018
+  
+  - `estab_homo_base`= Código establecimiento de la primera hospitalización del 2018
+  
+  - `sum_autolesiones`= Suma de diagnósticos de autolesiones para cada combinación RUN-mes
+  
+  - `sum_codigo_region_rec_rm`= Suma de atenciones en RM en cada RUN-mes
+  
+  - `sum_codigo_region_rec_norm`= Suma de atenciones en no-RM en cada RUN-mes
+  
+- Ya sin agrupar, para cada fila, generar las siguientes variables (rowwise)
+
+  - `alphabet2`= Alfabeto para diagnósticos TSM y TUS: COC-MAR-OH-PSU-CP-CP_PSU. Si no hay eventos observados, se codifica como AUS. Si este último no es el caso, queda codificado como OTRO 
+  
+  - `alphabet3`= Simplificación al 2024-08-09 de `alphabet2` en SUS-CP-PSI-AUS-OTRO
+  
+  - `alphabet4`= Para región (2024-08-09) no-RM/AUS/RM   
+
+
+```{r mes-agrupacion-run-tiempo}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+gc() 
+
+# dt_ing_calendar_month_t_desde_primera_adm <- data.table::as.data.table(ing_calendar_month_t_desde_primera_adm)
+
+# dt_ing_calendar_month_t_desde_primera_adm[, `:=`(
+#   sum_tus2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("coc", "mar", "oh"), na.rm = TRUE), NA_integer_),
+#   sum_coc2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("coc"), na.rm = TRUE), NA_integer_),
+#   sum_mar2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("mar"), na.rm = TRUE), NA_integer_),
+#   sum_oh2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("oh"), na.rm = TRUE), NA_integer_),
+#   sum_tus_psy2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("coc", "mar", "oh", "psy"), na.rm = TRUE), NA_integer_)
+# ), by = 1:nrow(dt_ing_calendar_month_t_desde_primera_adm), .SDcols = patterns("rec32")]
+
+dt_ing_calendar_month_t_desde_primera_adm <- as_tidytable(ing_calendar_month_t_desde_primera_adm)|> 
+  mutate_rowwise(
+    sum_tus2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("coc", "mar", "oh"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_coc2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("coc"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_mar2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("mar"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_oh2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("oh"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_tus_psy2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("coc", "mar", "oh", "psy"), na.rm = TRUE),
+      NA_integer_
+    )
+  )
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+dt_ing_calendar_month_t_desde_primera_adm_dedup<-
+  dt_ing_calendar_month_t_desde_primera_adm |> 
+  mutate(delta= round((((days_elapsed)+1)/30.436875)*100,1))|> 
+  mutate(codigo_region_rec=ifelse(codigo_region==13,"RM","noRM"))|> 
+  mutate(estab_homo=as.character(estab_homo)) |> 
+  group_by(run) |>
+  mutate(
+    min_edad_anos                          = mean(min_edad_anos, na.rm = TRUE),
+    pueblo_originario_01                   = first(pueblo_originario_01, na_rm = TRUE),# el argumento no fue usado (na.rm = TRUE) #data.table::
+    inclusivo_real_historico               = max(inclusivo_real_historico, na.rm = TRUE),
+    prev_benef_rec_post                    = max(prev_benef_rec_post, na.rm = TRUE),
+    glosa_sexo                             = max(glosa_sexo, na.rm = TRUE),
+    factor_inclusivo_real_hist_mas_autperc = max(factor_inclusivo_real_hist_mas_autperc, na.rm = TRUE),
+    cens_time                              = mean(cens_time, na.rm=T),
+    death_time                             = mean(death_time, na.rm=T),
+    codigo_region_rec_base                 = first(codigo_region_rec, na_rm=T), #data.table::
+    estab_homo_base                        = first(estab_homo, na_rm=T) #data.table::
+  )|>
+  ungroup()|>   
+  group_by(run, month)|>
+  summarise(
+    sum_tus2      = sum(sum_tus2, na.rm = TRUE),
+    sum_coc2      = sum(sum_coc2, na.rm = TRUE),
+    sum_mar2      = sum(sum_mar2, na.rm = TRUE),
+    sum_oh2       = sum(sum_oh2, na.rm = TRUE),
+    sum_tus_psy2  = sum(sum_tus_psy2, na.rm = TRUE),
+    alphabet_comb = paste(alphabet, collapse = " + "),
+    delta_comb    = paste(delta, collapse = " + "),
+    n_dup         = n(), 
+    min_edad_anos             = mean(min_edad_anos, na.rm = TRUE),
+    pueblo_originario_01      = first(pueblo_originario_01, na_rm = TRUE),#data.table::
+    inclusivo_real_historico  = max(inclusivo_real_historico, na.rm = TRUE),
+    prev_benef_rec_post       = max(prev_benef_rec_post, na.rm = TRUE),
+    glosa_sexo                             = max(glosa_sexo, na.rm = TRUE),
+    factor_inclusivo_real_hist_mas_autperc = max(factor_inclusivo_real_hist_mas_autperc, na.rm = TRUE),
+    cens_time                              = mean(cens_time, na.rm=T),
+    death_time                             = mean(death_time, na.rm=T),
+    codigo_region_rec_base                 = first(codigo_region_rec, na_rm=T),#data.table::
+    estab_homo_base                        = first(estab_homo, na_rm=T),#data.table::
+    sum_autolesiones                       = sum(sum_autolesiones, na.rm=T),
+    sum_codigo_region_rec_rm               = sum(codigo_region_rec=="RM", na.rm=T),
+    sum_codigo_region_rec_norm             = sum(codigo_region_rec=="noRM", na.rm=T),
+    mort_intrahosp                         = sum(cond_egr==2, na.rm=T)
+  ) |>
+  ungroup() |> 
+  mutate(alphabet2 = case_when(
+    sum_coc2 > 0 & sum_coc2 == sum_tus2 & sum_tus2 == sum_tus_psy2 ~ "coc",
+    sum_mar2 > 0 & sum_mar2 == sum_tus2 & sum_tus2 == sum_tus_psy2 ~ "mar",
+    sum_oh2 > 0 & sum_oh2 == sum_tus2 & sum_tus2 == sum_tus_psy2 ~ "oh",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus2 == sum_tus_psy2 ~ "psu",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) == 1 & sum_tus_psy2 > sum_tus2 ~ "cp",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus_psy2 > sum_tus2 ~ "cp_psu",
+    sum_tus_psy2 > 0 & sum_tus2 == 0 ~ "psy",
+    alphabet_comb=="NA"~"aus",
+    TRUE ~ "otro"
+  ))|> 
+  #2024-08-09: modificaron los estados del alfabeto
+  mutate(alphabet3 = case_when(
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) >= 1 & sum_tus_psy2 == sum_tus2 ~ "sus",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) >= 1 & sum_tus_psy2 > sum_tus2 ~ "cp",
+    sum_tus_psy2 > 0 & sum_tus2 == 0 ~ "psi",
+    alphabet_comb=="NA"~"aus",
+    TRUE ~ "otro"
+  ))|> 
+  #2024-08-09: para región
+  mutate(alphabet4 = case_when(
+    sum_codigo_region_rec_norm>0~ "noRM",
+    alphabet_comb=="NA"~"aus",
+    TRUE ~ "RM"
+  ))|> 
+  #2024-08-10: corregir por ausencias del primer establecimiento en región y código
+  group_by(run)|> 
+  mutate(codigo_region_rec_base= max(codigo_region_rec_base, na.rm=T),
+                estab_homo_base= max(estab_homo_base, na.rm=T)) |> 
+  ungroup()|> 
+  #codigo_region_rec_base
+  mutate(alphabet_comb= ifelse(alphabet_comb=="NA",NA, alphabet_comb),
+                delta_comb= ifelse(delta_comb=="NA",NA, delta_comb)) |> 
+      (\(df) {
+    print(cat(paste0("Despues de agrupación por cada grilla-tiempo desde primera adm., Obs: ", formatC(nrow(df),big.mark="."), "\n")))
+    print(cat(paste0("Despues de agrupación por cada grilla-tiempo desde primera adm., RUNs: ", formatC(distinct(df, run)|> nrow(),big.mark="."), "\n")))
+    df
+  })()
+```
+
+Comprobamos que exista la cantidad de RUN-meses esperable.
+
+```{r mes-agrupacion-run-mes-comprobacion}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+if(nrow(dt_ing_calendar_month_t_desde_primera_adm_dedup)> length(unique(dt_ing_calendar_month_t_desde_primera_adm$run))*60){
+  stop(paste0("Número de filas, debería ser: ",
+              length(unique(dt_ing_calendar_month_t_desde_primera_adm$run))*60))  
+}
+if(
+dt_ing_calendar_month_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>1) |> nrow()>0){warning("Más de un fallecimiento por usuario")}
+```
+
+
+Ahora hacemos lo mismo para la base por trimestre
+
+```{r trim-agrupacion-run-tiempo}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+gc()
+
+dt_ing_calendar_quarter_t_desde_primera_adm <- as_tidytable(ing_calendar_quarter_t_desde_primera_adm) |> 
+  mutate_rowwise(
+    sum_tus2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("coc", "mar", "oh"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_coc2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("coc"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_mar2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("mar"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_oh2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("oh"), na.rm = TRUE),
+      NA_integer_
+    ),
+    sum_tus_psy2 = if_else(
+      !is.na(run_2) & run_2 != "",
+      sum(c_across(matches("rec32")) %in% c("coc", "mar", "oh", "psy"), na.rm = TRUE),
+      NA_integer_
+    )
+  )
+
+# dt_ing_calendar_quarter_t_desde_primera_adm <- data.table::as.data.table(ing_calendar_quarter_t_desde_primera_adm)
+# 
+# dt_ing_calendar_quarter_t_desde_primera_adm[, `:=`(
+#   sum_tus2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("coc", "mar", "oh"), na.rm = TRUE), NA_integer_),
+#   sum_coc2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("coc"), na.rm = TRUE), NA_integer_),
+#   sum_mar2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("mar"), na.rm = TRUE), NA_integer_),
+#   sum_oh2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("oh"), na.rm = TRUE), NA_integer_),
+#   sum_tus_psy2 = ifelse(!is.na(run_2) & run_2 != "", sum(.SD %in% c("coc", "mar", "oh", "psy"), na.rm = TRUE), NA_integer_)
+# ), by = 1:nrow(dt_ing_calendar_quarter_t_desde_primera_adm), .SDcols = patterns("rec32")]
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup<-
+  dt_ing_calendar_quarter_t_desde_primera_adm |>
+  mutate(delta= round((((days_elapsed)+1)/91.31063)*100,1))|>
+  mutate(codigo_region_rec=ifelse(codigo_region==13,"RM","noRM"))|>
+  group_by(run)|> 
+  mutate(
+    min_edad_anos                          = mean(min_edad_anos, na.rm = TRUE),
+    pueblo_originario_01                   = first(pueblo_originario_01, na_rm = TRUE),#data.table::
+    inclusivo_real_historico               = max(inclusivo_real_historico, na.rm = TRUE),
+    prev_benef_rec_post                    = max(prev_benef_rec_post, na.rm = TRUE),
+    glosa_sexo                             = max(glosa_sexo, na.rm = TRUE),
+    factor_inclusivo_real_hist_mas_autperc = max(factor_inclusivo_real_hist_mas_autperc, na.rm = TRUE),
+    cens_time                              = mean(cens_time, na.rm=T),
+    death_time                             = mean(death_time, na.rm=T),
+    codigo_region_rec_base                 = first(codigo_region_rec, na_rm=T),#data.table::
+    estab_homo_base                        = first(estab_homo, na_rm=T)#data.table::
+  )|> 
+  ungroup()|>  
+  group_by(run, quarter)|>
+  summarise(
+    sum_tus2      = sum(sum_tus2, na.rm = TRUE),
+    sum_coc2      = sum(sum_coc2, na.rm = TRUE),
+    sum_mar2      = sum(sum_mar2, na.rm = TRUE),
+    sum_oh2       = sum(sum_oh2, na.rm = TRUE),
+    sum_tus_psy2  = sum(sum_tus_psy2, na.rm = TRUE),
+    alphabet_comb = paste(alphabet, collapse = " + "),
+    delta_comb    = paste(delta, collapse = " + "),
+    n_dup         = n(), 
+    min_edad_anos             = mean(min_edad_anos, na.rm = TRUE),
+    pueblo_originario_01      = first(pueblo_originario_01, na_rm = TRUE),#data.table::
+    inclusivo_real_historico  = max(inclusivo_real_historico, na.rm = TRUE),
+    prev_benef_rec_post       = max(prev_benef_rec_post, na.rm = TRUE),
+    glosa_sexo                             = max(glosa_sexo, na.rm = TRUE),
+    factor_inclusivo_real_hist_mas_autperc = max(factor_inclusivo_real_hist_mas_autperc, na.rm = TRUE),
+    cens_time                              = mean(cens_time, na.rm=T),
+    death_time                             = mean(death_time, na.rm=T),
+    codigo_region_rec_base                 = first(codigo_region_rec, na_rm=T),#data.table::
+    estab_homo_base                        = first(estab_homo, na_rm=T),    #data.table::
+    sum_autolesiones                       = sum(sum_autolesiones, na.rm=T),
+    sum_codigo_region_rec_rm               = sum(codigo_region_rec=="RM", na.rm=T),
+    sum_codigo_region_rec_norm             = sum(codigo_region_rec=="noRM", na.rm=T),
+    mort_intrahosp                         = sum(cond_egr==2, na.rm=T)
+  )|>
+  ungroup()|>
+  mutate(alphabet2 = case_when(
+    sum_coc2 > 0 & sum_coc2 == sum_tus2 & sum_tus2 == sum_tus_psy2 ~ "coc",
+    sum_mar2 > 0 & sum_mar2 == sum_tus2 & sum_tus2 == sum_tus_psy2 ~ "mar",
+    sum_oh2 > 0 & sum_oh2 == sum_tus2 & sum_tus2 == sum_tus_psy2 ~ "oh",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus2 == sum_tus_psy2 ~ "psu",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) == 1 & sum_tus_psy2 > sum_tus2 ~ "cp",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus_psy2 > sum_tus2 ~ "cp_psu",
+    sum_tus_psy2 > 0 & sum_tus2 == 0 ~ "psy",
+    alphabet_comb=="NA"~"aus",
+    TRUE ~ "otro"
+  ))|>
+  #2024-08-09: modificaron los estados del alfabeto
+  mutate(alphabet3 = case_when(
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) >= 1 & sum_tus_psy2 == sum_tus2 ~ "sus",
+    ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) >= 1 & sum_tus_psy2 > sum_tus2 ~ "cp",
+    sum_tus_psy2 > 0 & sum_tus2 == 0 ~ "psi",
+    alphabet_comb=="NA"~"aus",
+    TRUE ~ "otro"
+  ))|>
+  #2024-08-09: para región
+  mutate(alphabet4 = case_when(
+    sum_codigo_region_rec_norm>0~ "noRM",
+    alphabet_comb=="NA"~"aus",
+    TRUE ~ "RM"
+  ))|>
+  #2024-08-10: corregir por ausencias del primer establecimiento en región y código
+  group_by(run)|>
+  mutate(codigo_region_rec_base= max(codigo_region_rec_base, na.rm=T),
+                estab_homo_base= max(estab_homo_base, na.rm=T))|>
+  ungroup()|>
+  mutate(alphabet_comb= ifelse(alphabet_comb=="NA",NA, alphabet_comb),
+                delta_comb= ifelse(delta_comb=="NA",NA, delta_comb))
+#Despues de agrupación por cada grilla-tiempo desde primera adm., Obs: 397.560
+#Despues de agrupación por cada grilla-tiempo desde primera adm., RUNs: 6.626
+```
+
+
+```{r trim-agrupacion-run-trim-comprobacion}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+invisible("Ver si se añaden filas RUN*20")
+if(nrow(dt_ing_calendar_quarter_t_desde_primera_adm_dedup)> length(unique(dt_ing_calendar_quarter_t_desde_primera_adm$run))*20){
+  stop(paste0("Número de filas, debería ser: ",
+              length(unique(dt_ing_calendar_quarter_t_desde_primera_adm$run))*20))  
+}
+
+invisible("Ver si los")
+if(
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>1) |> nrow()>0){warning("Más de un fallecimiento por usuario")}
+
+if(
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> nrow()>0){warning("Al menos un fallecimiento por usuario")}
+
+```
+
+<br>
+
+## 2.3. Retoques y modificaciones finales
+
+
+### 2.3.1. Formato ancho
+
+#### 2.3.1.a. Mensual
+
+##### 2.3.1.a.I. Alfabeto TSM/TUS complejo
+
+El análisis de secuencias requiere contar con una base de datos en formato ancho. Por lo mismo, se llevo a cabo el formateo de la base de datos. 
+
+Luego, 
+
+- Generamos una base alternativa que incluya los estados de censura, para fines descriptivos (`ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens`). 
+
+- Recodificamos la variable `death_time`, para que en caso que las personas que no experimenten fallecimiento, reciban el recuento máximo de meses/trimestres; de lo contrario, que indique los meses/trimestres desde la primera admisión en que se registró el fallecimiento.
+
+- Comprobamos que no hubiera diferencias entre el tiempo entre la censura y los pacientes con mortalidad intrahospitalaria.
+
+- Para la base de datos censurada `ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens`, ya que fui introduciendo el estado "cens", ya fuera por fallecimiento o censura. Esto lo va introduciendo de manera recursiva, desde la columna 59 hasta la 1 (asumimos que en el tiempo 0 las personas se encontraban, de lo contrario no podríamos haberlas incorporado a la base).
+
+
+```{r mes-wide-alfabeto-tsm-tus-complejo}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide<-
+dt_ing_calendar_month_t_desde_primera_adm_dedup|> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  "prev_benef_rec_post", "cens_time", "death_time","codigo_region_rec_base", "estab_homo_base"),#,
+  names_from="month", values_from ="alphabet2") #%>% 
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens <-
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide$death_time)
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_month_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide |> 
+  filter(run %in% run_mort_intrahosp, death_time==60) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 59, si la cur_column es mayor o igual a la columna 59, "censura"
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+##### 2.3.1.a.II. Alfabeto TSM/TUS simplificado
+
+Esta base se denominó `ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2`
+
+```{r mes-wide-alfabeto-tsm-tus-simplificado}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+#2024-08-09: modificaron los estados del alfabeto
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2<-
+  dt_ing_calendar_month_t_desde_primera_adm_dedup |> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", 
+                                "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  
+                                "prev_benef_rec_post", "cens_time", "death_time", 
+                                "codigo_region_rec_base", "estab_homo_base"), 
+                     names_from="month", values_from ="alphabet3") #%>% 
+
+#table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$`0`, exclude=NULL)
+
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens <-
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2$death_time)
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_month_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2 |> 
+  filter(run %in% run_mort_intrahosp, death_time==60) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 59, si la cur_column es mayor o igual a la columna 59, "censura"
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+
+##### 2.3.1.a.III. Alfabeto autolesiones (ausencia/presencia)
+
+Esta base se denominó `ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3`. Muy pocos casos, por lo que se decidió no analizar.
+
+```{r mes-wide-alfabeto-autolesiones}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+#| eval: false
+
+#2024-08-09: modificaron los estados del alfabeto
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3<-
+  dt_ing_calendar_month_t_desde_primera_adm_dedup |> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", 
+                                "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  
+                                "prev_benef_rec_post", "cens_time", "death_time", 
+                                "codigo_region_rec_base", "estab_homo_base"), 
+                     names_from="month", values_from ="autolesion") #%>% 
+
+#table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3$`0`, exclude=NULL)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens <-
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3$death_time)
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_month_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3 |> 
+  filter(run %in% run_mort_intrahosp, death_time==60) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 59, si la cur_column es mayor o igual a la columna 59, "censura"
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+
+##### 2.3.1.a.IV. Alfabeto RM vs. no-RM
+
+Esta base se denominó `ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4`
+
+```{r mes-wide-alfabeto-rm-norm}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+#2024-08-09: modificaron los estados del alfabeto
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4<-
+  dt_ing_calendar_month_t_desde_primera_adm_dedup |> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", 
+                                "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  
+                                "prev_benef_rec_post", "cens_time", "death_time", 
+                                "codigo_region_rec_base", "estab_homo_base"), 
+                     names_from="month", values_from ="alphabet4") #%>% 
+
+#table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide3$`0`, exclude=NULL)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens <-
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4$death_time)
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens$death_time), 60, ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_month_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4 |> 
+  filter(run %in% run_mort_intrahosp, death_time==60) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 59, si la cur_column es mayor o igual a la columna 59, "censura"
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 59:1) {
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens <- ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide4_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+#### 2.3.1.b Trimestral
+
+##### 2.3.1.b.I. Alfabeto TSM/TUS complejo
+
+```{r trim-wide-alfabeto-tsm-tus-complejo}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide<-
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup|> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  "prev_benef_rec_post", "cens_time", "death_time","codigo_region_rec_base", "estab_homo_base"),#,
+  names_from="quarter", values_from ="alphabet2") #%>% 
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens <-
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide$death_time)
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide |> 
+  filter(run %in% run_mort_intrahosp, death_time==20) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 19, si la cur_column es mayor o igual a la columna 19, "censura"
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+##### 2.3.1.b.II. Alfabeto TSM/TUS simplificado
+
+Esta base se denominó `ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2`
+
+```{r trim-wide-alfabeto-tsm-tus-simplificado}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+#2024-08-09: modificaron los estados del alfabeto
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2<-
+  dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", 
+                                "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  
+                                "prev_benef_rec_post", "cens_time", "death_time", 
+                                "codigo_region_rec_base", "estab_homo_base"), 
+                     names_from="quarter", values_from ="alphabet3") #%>% 
+
+#table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2$`0`, exclude=NULL)
+
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens <-
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2$death_time)
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2 |> 
+  filter(run %in% run_mort_intrahosp, death_time==20) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run) |> length() ) >0
+){
+  otro_primer_tto<- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2 |> 
+    filter(`0`=="otro") |> pull(run)
+  stop("hay un usuario con tratamiento Otro como el primero")
+  
+  } #78c5ddad6b22f96cbb140914ecda8a0a2bc577655ab0fa0d4882cf24b2d9308d
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 19, si la cur_column es mayor o igual a la columna 19, "censura"
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+
+##### 2.3.1.b.III. Alfabeto autolesiones (ausencia/presencia)
+
+Esta base se denominó `ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3`. Muy pocos casos, por lo que se decidió no analizar.
+
+```{r trim-wide-alfabeto-autolesiones}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+#| eval: false
+
+#2024-08-09: modificaron los estados del alfabeto
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3<-
+  dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", 
+                                "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  
+                                "prev_benef_rec_post", "cens_time", "death_time", 
+                                "codigo_region_rec_base", "estab_homo_base"), 
+                     names_from="quarter", values_from ="autolesion") #%>% 
+
+#table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3$`0`, exclude=NULL)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens <-
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3$death_time)
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3 |> 
+  filter(run %in% run_mort_intrahosp, death_time==20) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 19, si la cur_column es mayor o igual a la columna 19, "censura"
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+
+##### 2.3.1.b.IV. Alfabeto RM vs. no-RM
+
+Esta base se denominó `ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4`
+
+```{r trim-wide-alfabeto-rm-norm}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: true
+#| error: true
+#| results: "hold"
+
+#2024-08-09: modificaron los estados del alfabeto
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4<-
+  dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> 
+  pivot_wider(id_cols= c("run","pueblo_originario_01", "glosa_sexo", 
+                                "factor_inclusivo_real_hist_mas_autperc", "inclusivo_real_historico",  
+                                "prev_benef_rec_post", "cens_time", "death_time", 
+                                "codigo_region_rec_base", "estab_homo_base"), 
+                     names_from="quarter", values_from ="alphabet4") #%>% 
+
+#table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide3$`0`, exclude=NULL)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añadió una base de datos con censura")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens <-
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Se añade el tiempo al fallecimiento")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4$death_time)
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens$death_time<- 
+  ifelse(is.nan(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens$death_time), 20, ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens$death_time)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+invisible("Comprobar que no haya personas que no murieran")
+run_mort_intrahosp<-
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>0) |> pull(run)
+
+if(
+  ( ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4 |> 
+  filter(run %in% run_mort_intrahosp, death_time==20) |> 
+  nrow() 
+  ) >0
+  ){ 
+    stop("Hay pacientes con mortalidad intrahospitalaria que no aparecen en las ases de mortalidad")
+    }
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+#tiene censura 19, si la cur_column es mayor o igual a la columna 19, "censura"
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(cens_time) <= i, "cens", !!sym(as.character(i))))
+}
+for(i in 19:1) {
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4_cens %>%
+    mutate(!!as.character(i) := ifelse(ceiling(death_time) <= i, "cens", !!sym(as.character(i))))
+}
+```
+
+
+<br>
+
+# Información de la sesión
+
+```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T, results='hold'}
+cat(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
+cat(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
+cat(paste0("Editor context: ", getwd()))
+cat("quarto version: "); system("quarto --version") 
+
+quarto::quarto_version()
+
+save.image("20240902_25.RData")
+```
+
+
+```{r session-info-r, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T, results='hold'}
+#| class-output: center-table
+
+sesion_info <- devtools::session_info()
+dplyr::select(
+  tibble::as_tibble(sesion_info$packages),
+  c(package, loadedversion, source)
+) |> 
+ knitr::kable(caption = "R packages", format = "html",
+      col.names = c("Row number", "Package", "Version"),
+    row.names = FALSE,
+      align = c("c", "l", "r")) |> 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```
+
+
+```{r session-info-python, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T, results='hold'}
+#| class-output: center-table
+
+reticulate::py_list_packages()%>% 
+ knitr::kable(caption = "Python packages", format = "html",
+      col.names = c("Package", "Version", "Requirement"),
+    row.names = FALSE,
+      align = c("c", "l", "r", "r"))%>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12)|>
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```

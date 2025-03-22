@@ -2395,7 +2395,7 @@ distill-header .nav a {
 <ul>
 <li><p><a href="un_inv_II/001_seleccionar_casos.py">Sintaxis python en la que se estructuran las fechas, variables alfabeto preliminares y recuentos de pertenencia a PPOO</a></p></li>
 <li><p><a href="un_inv_II/002_casos_ppoo_minsal_rsh_al_menos.py">Sintaxis python en la que se identifica a personas que alguna vez en los registros se autoidentificaron como pertenecientes a PPOO por MINSAL o RSH</a></p></li>
-<li><p><a href="un_inv_ii_post_ib_SM.R">Sintaxis en la que se seleccionó la muestra a trabajar</a></p></li>
+<li><p><a href="un_inv_ii_post_ib_SM.R">Sintaxis en la que se seleccionó del subconjunto a trabajar</a></p></li>
 <li><p><a href="un_inv_ii2.R">Sintaxis en la que se creó las variables de interés y se estructuró la base de datos de trayectorias</a></p></li>
 </ul>
 <p><strong>Pasos (Markdown, resultados agregados)</strong></p>
@@ -2406,6 +2406,16 @@ distill-header .nav a {
 <li><p><a href="un_inv_ii5.html">Caracterización de conglomerados</a></p></li>
 <li><p><a href="un_inv_ii6.html">Caracterización de conglomerados (sensibilidad trimestral)</a></p></li>
 <li><p><a href="un_inv_ii7.html">Caracterización de conglomerados (sensibilidad mensual)</a></p></li>
+</ul>
+<p><strong>Pasos corregidos (Reportes, resultados agregados)</strong></p>
+<ul>
+<li><p><a href="un_inv_ii_post_ib_SM_25.html">Selección del subconjunto a trabajar</a></p></li>
+<li><p><a href="un_inv_ii2_25.html">Creación de las variables de interés y estructuración de la base de datos de trayectorias</a></p></li>
+<li><p><a href="un_inv_ii3_25.html">Selección de soluciones de conglomerados</a></p></li>
+<li><p><a href="un_inv_ii4_25.R">Selección de soluciones de conglomerados(sintaxis)</a></p></li>
+<li><p><a href="un_inv_ii5_25.html">Caracterización de conglomerados</a></p></li>
+<li><p><a href="un_inv_ii6_25.html">Caracterización de conglomerados (sensibilidad trimestral)</a></p></li>
+<li><p><a href="un_inv_ii7_25.html">Caracterización de conglomerados (sensibilidad mensual)</a></p></li>
 </ul>
 <p><strong>Estructura archivos preliminares a Markdown</strong></p>
 <div style="font-size:10px !important; line-height: 1.0 !important;">
@@ -2429,55 +2439,72 @@ distill-header .nav a {
     - &quot;F12|T407&quot; = mar 
     - &quot;F10|T510&quot; = oh 
     - &quot;F0[0-9]|F2[0-9]|F3[0-9]|F4[0-9]|F5[0-9]|F6[0-9]|F7[0-9]|F8[0-9]|F9[0-8]&quot; = psy
-  - Genera columnas que suman para cada evento hospitalario la presencia de cada clasificación en las _rec3:
+  - Genera columnas que suman para cada evento hospitalario la presencia de cada clasificaciÃ³n en las _rec3:
     - sum_tus (suma de sustancias)
-    - sum_coc (suma sólo de códigos coc)
-    - sum_mar (códigos mar)
-    - sum_oh (códigos oh)
-    - sum_tus_psy (códigos o relacionados con sustancias o psy, inclusive)
-  - Genera columnas para sumar por cada evento hospitalario la presencia de clasificación CONADI:
+    - sum_coc (suma sÃ³lo de cÃ³digos coc)
+    - sum_mar (cÃ³digos mar)
+    - sum_oh (cÃ³digos oh)
+    - sum_tus_psy (cÃ³digos o relacionados con sustancias o psy, inclusive)
+  - Genera columnas para sumar por cada evento hospitalario la presencia de clasificaciÃ³n CONADI:
     - sum_conadi (presencia de 1&#39;s en columnas CONADI, ya sea cya o ci)
-    - ppo_conadi (binaria, si hay más de 0, hay al menos una clasificación por CONADI)
+    - ppo_conadi (binaria, si hay mÃ¡s de 0, hay al menos una clasificaciÃ³n por CONADI)
   - Genera columna alfabet = coc, mar, oh, cp, psu, cp_psu, psy
   - Exporta a 20231205_hosp_mod20240404.parquet.gzip
   - Total de observaciones = 20,915,274.
 
 - <b>un_inv_II\002_casos_ppoo_minsal_rsh_al_menos.py</b>= A partir de asignaturas/10_Egresos Hospitalarios/20231205_hosp.parquet.gzip
-  - Agrupa por RUN a quienes tienen un 1 en la recodificación binaria &quot;pueblo_originario_01&quot; (quienes se autoidentificaron alguna vez en la BD como perteneciente a PPOO en registros MINSAL) o &quot;RSH&quot; (para quienes se autoidentificaron en el Registro Social de Hogares)
+  - Agrupa por RUN a quienes tienen un 1 en la recodificaciÃ³n binaria &quot;pueblo_originario_01&quot; (quienes se autoidentificaron alguna vez en la BD como perteneciente a PPOO en registros MINSAL) o &quot;RSH&quot; (para quienes se autoidentificaron en el Registro Social de Hogares)
   - Filtra los RUNs que tengan valores mayores a 0 en alguna de estos campos
   - Exporta a filtered_df.csv.gz, que permite generar inclusivo_real_historico posteriormente
 
 - <b>un_inv_ii_post_ib_SM.R</b> = Utiliza 20231205_hosp_mod20240404.parquet.gzip
-  - Se diagnosticó el problema con el código de establecimiento
-  - Se analizan las fechas, se genera la variable año de ingreso
-  - Se filtran eventos hospitalarios con días de ingreso negativos 
-  - Se descartan tiempos de estadía &gt;1827 días
-  - Se recodifican caracteres vacíos (ej., &quot;None&quot;) en diagnósticos CIE-10
-  - Se descartan RUNs erróneos
+  - Se diagnosticÃ³ el problema con el cÃ³digo de establecimiento
+  - Se analizan las fechas, se genera la variable aÃ±o de ingreso
+  - Se filtran eventos hospitalarios con dÃ­as de ingreso negativos 
+  - Se descartan tiempos de estadÃ­a &gt;1827 dÃ­as
+  - Se recodifican caracteres vacÃ­os (ej., &quot;None&quot;) en diagnÃ³sticos CIE-10
+  - Se descartan RUNs errÃ³neos
   - Se descartan pacientes con nacionalidades distintas a Chile
   - Se utiliza filtered_df.csv.gz para generar inclusivo_real_historico, que agrupa a tod@s los que se autoidentifican RSH o MINSAL desde 2010 y CONADI.
-  - Unión preliminar con base de mortalidad (_output/def_enc.csv) y nacimientos (_output/nac_enc.csv)
+  - UniÃ³n preliminar con base de mortalidad (_output/def_enc.csv) y nacimientos (_output/nac_enc.csv)
   - Genera 20240405.RData
 
 - <b>un_inv_ii2.R</b> = Utiliza 20240405.RData
-  - Primera actualización (2024-05-10): Filtró personas sin historial previo de SM/SUD antes de 2017 pero con eventos en 2018 antes de su primera hospitalización en el rango 15-29 años.
-  - Segunda actualización (2024-05-11): Eliminó hospitalizaciones duplicadas considerando múltiples variables clave.
-  - Exploración Códigos de autolesiones (codigos_z_filtered_df.csv.gz, proveniente de un_inv_II/003_casos_con_codigos_z.py)
-  - Se utiliza el archivo de Hospitalizaciones corregido por MINSAL (&quot;_data/EH_2010_2022_Pasantes_v2_encrip.csv&quot;) para unir con el original (de Diciembre 2013) y obtener el código de establecimiento corregido.
-  - Clasificación de Previsión
-  - Imputación valores Previsión y Tramo (diagrama proceso en &quot;_figs/diagram_imputacion_prev_isapre.bpmn&quot;)
-  - Intento de clasificación de especialidades
-  - Descartados casos en episodios hospitalarios de ingresos de mayores de 18 años en neonatología
-  - Exploración diagramas de movilidad
-  - Ejercicios fallidos de clasificación un_inv_II/006_trees_para_where.py
-  - Exploración conglomerados de establecimientos
-  - **ESTRUCTURACIÓN BASE FORMATO SSA**
+  - Primera actualizaciÃ³n (2024-05-10): FiltrÃ³ personas sin historial previo de SM/SUD antes de 2017 pero con eventos en 2018 antes de su primera hospitalizaciÃ³n en el rango 15-29 aÃ±os.
+  - Segunda actualizaciÃ³n (2024-05-11): EliminÃ³ hospitalizaciones duplicadas considerando mÃºltiples variables clave.
+  - ExploraciÃ³n CÃ³digos de autolesiones (codigos_z_filtered_df.csv.gz, proveniente de un_inv_II/003_casos_con_codigos_z.py)
+  - Se utiliza el archivo de Hospitalizaciones corregido por MINSAL (&quot;_data/EH_2010_2022_Pasantes_v2_encrip.csv&quot;) para unir con el original (de Diciembre 2013) y obtener el cÃ³digo de establecimiento corregido.
+  - ClasificaciÃ³n de PrevisiÃ³n
+  - ImputaciÃ³n valores PrevisiÃ³n y Tramo (diagrama proceso en &quot;_figs/diagram_imputacion_prev_isapre.bpmn&quot;)
+  - Intento de clasificaciÃ³n de especialidades
+  - Descartados casos en episodios hospitalarios de ingresos de mayores de 18 aÃ±os en neonatologÃ­a
+  - ExploraciÃ³n diagramas de movilidad
+  - Ejercicios fallidos de clasificaciÃ³n un_inv_II/006_trees_para_where.py
+  - ExploraciÃ³n conglomerados de establecimientos
+  - **ESTRUCTURACIÃ“N BASE FORMATO SSA**
     - Formato wide, hacer bases de datos de grillas por mes y trimestrales
-    - Poblar dichas bases de datos con información de la base original (df_filled) en función de fechas de ingreso y egreso y alfabeto
-    - Se añade defunciones
+    - Poblar dichas bases de datos con informaciÃ³n de la base original (df_filled) en funciÃ³n de fechas de ingreso y egreso y alfabeto
+    - Se aÃ±ade defunciones
   - Genera 20240902.RData
 
- 
+
+- Los .qmd, .HTML y bases de datos .RData que terminan en _25 responoden a la correcciÃ³n aplicada incorporando RUNs que no fueron necesariamente la primera observaciÃ³n el 2018 pero tenÃ­an de todas formas entre 15 y 29 aÃ±os (saquÃ© el group by slice (1) ungroup), lo cual era correcto, ademÃ¡s de incorporar aquellos con mortalidad intrahospitalaria (tambiÃ©n correcto). Eso ayudÃ³ a ganar como 500 mÃ¡s personas.
+
+(*) Para subir archivos a Saturn Cloud, debo comprimir en .rar por partes de 300MB cada una, subirlas y en Saturn Cloud, y ejecutar en terminal:
+    # Install unrar using conda (no admin needed)
+    conda install -c conda-forge unrar
+
+    # Create extraction directory
+    mkdir -p ~/workspace/extracted
+
+    # Extract using first part (automatically finds others)
+    unrar x ~/workspace/20240903.part1.rar ~/workspace/extracted/
+    unrar x ~/workspace/20240405.part1.rar ~/workspace/extracted/
+    unrar x ~/workspace/20231205_hosp_mod20240331.parquet.part1.rar ~/workspace/extracted/
+  
+    # Remove rars
+    rm ~/workspace/*.part*.rar
+    ACTUALIZACION= SÃ³lo necesito subir los archivos .rds alojados en _perm en Ubuntu 
 </pre>
 
 </div>

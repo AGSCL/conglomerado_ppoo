@@ -84,6 +84,8 @@ if(Sys.info()["sysname"]=="Windows"){
 if (getRversion() != "4.4.0") { stop("Requiere versión de R 4.4.0. Actual: ", getRversion()) }
 }
 
+cat("quarto version: "); system("quarto --version") 
+
 if(!require(job)){install.packages("job");require(job)}
 if(!require(kableExtra)){install.packages("kableExtra");require(kableExtra)}
 if(!require(tidyverse)){install.packages("tidyverse");require(tidyverse)}
@@ -535,21 +537,21 @@ format_cells <- function(df, rows ,cols, value = c("italics", "bold", "strikethr
 }
 #To produce line breaks in messages and warnings
 knitr::knit_hooks$set(
-  error = function(x, options) {
-    paste('\n\n<div class="alert alert-danger">',
-          gsub('##', '\n', gsub('^##\ Error', '**Error**', x)),
-          '</div>', sep = '\n')
-  },
-  warning = function(x, options) {
-    paste('\n\n<div class="alert alert-warning">',
-          gsub('##', '\n', gsub('^##\ Warning:', '**Warning**', x)),
-          '</div>', sep = '\n')
-  },
-  message = function(x, options) {
-    paste('<div class="message">',
-          gsub('##', '\n', x),
-          '</div>', sep = '\n')
-  }
+   error = function(x, options) {
+     paste('\n\n<div class="alert alert-danger" style="font-size: small !important;">',
+           gsub('##', '\n', gsub('^##\ Error', '**Error**', x)),
+           '</div>', sep = '\n')
+   },
+   warning = function(x, options) {
+     paste('\n\n<div class="alert alert-warning" style="font-size: small !important;">',
+           gsub('##', '\n', gsub('^##\ Warning:', '**Warning**', x)),
+           '</div>', sep = '\n')
+   },
+   message = function(x, options) {
+     paste('<div class="message" style="font-size: small !important;">',
+           gsub('##', '\n', x),
+           '</div>', sep = '\n')
+   }
 )
 
 #_#_#_#_#_#_#_#_#_#_#_#_#_
@@ -577,7 +579,26 @@ smd_bin <- function(x,y){
   return((x-y)/sqrt(l))
   
 }
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
 
+format_table_vec <- function(tbl, digits = 1) {
+  counts <- as.numeric(tbl)
+  percentages <- prop.table(tbl) * 100
+  
+  formatted <- sapply(seq_along(counts), function(i) {
+    p_val <- percentages[i]
+    # Si el porcentaje es prácticamente entero, formatea sin decimales
+    if (abs(p_val - round(p_val)) < .Machine$double.eps^0.5) {
+      p_str <- sprintf("%.0f", p_val)
+    } else {
+      p_str <- sprintf(paste0("%.", digits, "f"), p_val)
+    }
+    paste0(counts[i], " (", p_str, ")")
+  })
+  
+  formatted
+}
 #:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
 #:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
 
@@ -1014,6 +1035,9 @@ dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec<- ifelse(!is.na(dt_d
 
 psych::describe(dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec) %>% 
   knitr::kable("html", digits=2)
+
+cat("Q1=");round(quantile(dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec,.25),2)
+cat("Q3=");round(quantile(dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec,.75),2)
 ```
 
 ## 0.c. Compilación de todos CQI's
@@ -1222,11 +1246,11 @@ head(arrange(data.frame(table(diag_todos)), -Freq) |> dplyr::mutate(perc=scales:
 #| fig.show: hide
 #| collapse: true
 
-
 pamRange_quarter_om2 <- wcKMedRange(dist_quarter_om, kvals=2:15,  initialclust = om_dist_quarter)
 pamRange_quarter_lcs2 <- wcKMedRange(dist_quarter_lcs, kvals=2:15,  initialclust = lcs_dist_quarter)
 
 as2 <- new.env()
+#alternative if null_ssa_pam_quarter_om_comb_20241226 gives error!
 load("_perm/bah.RData", envir = as2)
 
 as <- new.env()
@@ -1524,6 +1548,7 @@ rm(pam_lcs_quarter_null_seq2, envir = as)
 
 options(width = getOption("width"))
 
+rm(as)
 rm(as2)
 ```
 
@@ -2383,6 +2408,7 @@ Vemos los diagnósticos que vienen después de aquellos cluster con más de un i
 #| eval: true
 #| paged.print: true
 
+
 cat("resumen de episodios")
 df_filled %>% 
     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="5939, Un semestre TSM(1)")$run) %>% 
@@ -2460,6 +2486,301 @@ length(diag_pam_om4_5939)
 
 Entre quienes se encuentren en un semestre en el sistema por TSM y presentan un segundo episodio, de las 20 condiciones más frecuentes, al menos el 50% se caracteriza por episodios depresivos no especificado (F329), trastornos de la personalidad tipo límite (F603), otros trastornos específicos de la personalidad (F609) y episodios depresivos graves sin síntomas psicóticos (F322) y esquizofrenia no especificada (F209).
 
+```{r 11b-act-por-cie10}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+# Trastornos mentales orgánicos: F00.0-F09.9 (F000 a F099)
+in_organic <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F0[0-9]", codigo)
+})
+
+# Trastornos por uso de sustancias: F10.0-F19.9 (F10 a F19)
+in_substance <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F1[0-9]", codigo)
+})
+
+# Esquizofrenia: F20.0-F20.9 (F20)
+in_esquizofrenia <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F20", codigo)
+})
+
+# Otros trastornos psicóticos no afectivos: F21.0-F29.9 (F21 a F29)
+in_otros_psicoticos <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F2[1-9]", codigo)
+})
+
+# Trastornos bipolares: F30.0-F31.9 (F30 o F31)
+in_bipolares <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^(F30|F31)", codigo)
+})
+
+# Trastornos depresivos y otros del estado de ánimo: F32.0-F39.9 (F32 a F39)
+in_depresivos <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F3[2-9]", codigo)
+})
+
+# Trastornos de ansiedad: F40.0-F49.9 (F40 a F49)
+in_ansiedad <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F4[0-9]", codigo)
+})
+
+# Trastornos de la personalidad: F60.0-F69.9 (F60 a F69)
+in_personalidad <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F6[0-9]", codigo)
+})
+
+
+agregar_columnas_icd <- function(df) {
+  # Especificamos las columnas de diagnóstico
+  diag_cols <- paste0("diag", 1:11)
+  
+  df %>%
+    mutate(
+      organic = rowSums(across(all_of(diag_cols), ~ in_organic(.))) > 0,
+      substance = rowSums(across(all_of(diag_cols), ~ in_substance(.))) > 0,
+      esquizofrenia = rowSums(across(all_of(diag_cols), ~ in_esquizofrenia(.))) > 0,
+      otros_psicoticos = rowSums(across(all_of(diag_cols), ~ in_otros_psicoticos(.))) > 0,
+      bipolares = rowSums(across(all_of(diag_cols), ~ in_bipolares(.))) > 0,
+      depresivos = rowSums(across(all_of(diag_cols), ~ in_depresivos(.))) > 0,
+      ansiedad = rowSums(across(all_of(diag_cols), ~ in_ansiedad(.))) > 0,
+      personalidad = rowSums(across(all_of(diag_cols), ~ in_personalidad(.))) > 0
+    )
+}
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+cat("2025-03-01: general")
+first_episode<-
+df_filled %>% 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run)%>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    dplyr::filter(row_number() == 1)%>%
+    dplyr::ungroup()
+
+first_episode_rec<-
+agregar_columnas_icd(first_episode)
+  
+tot_cie10_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec$personalidad, levels = c(FALSE, TRUE))))
+                 )%>%
+  { colnames(.) <- c("FALSE", "TRUE"); rownames(.)<-NULL; . }
+#         FALSE        TRUE
+# 1 4858 (80.5) 1180 (19.5)
+# 2 5612 (92.9)   426 (7.1)
+# 3 5645 (93.5)   393 (6.5)
+# 4 5652 (93.6)   386 (6.4)
+# 5 4215 (69.8) 1823 (30.2)
+# 6 5072 (84.0)  966 (16.0)
+# 7 4903 (81.2) 1135 (18.8)
+
+cat("2025-03-01: TSM 1 semestre")
+first_episode_1_trim_tsm<-
+df_filled %>% 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6035, Un trimestre, TSM(4)")$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    dplyr::filter(row_number() == 1)%>%
+    dplyr::ungroup()
+
+cat("2025-03-01: TSM 2 trimestres")
+first_episode_tsm_1_sem_tsm<-
+df_filled %>% 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="5939, Un semestre TSM(1)")$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    dplyr::filter(row_number() == 1)%>%
+    dplyr::ungroup()
+
+cat("2025-03-01: Comorbilidad")
+first_episode_com<-
+df_filled %>% 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="5989, Comorbilidad un trimestre(2)")$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    dplyr::filter(row_number() == 1)%>%
+    dplyr::ungroup()
+
+cat("2025-03-01: TUS")
+first_episode_tus<-
+df_filled %>% 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6025, Un trimestre, TUS(3)")$run) %>% 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) %>% 
+    dplyr::group_by(run) %>%
+    dplyr::filter(row_number() == 1)%>%
+    dplyr::ungroup()
+
+
+first_episode_1_trim_tsm_rec<-
+agregar_columnas_icd(first_episode_1_trim_tsm)
+
+prim_trim_tsm_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec$personalidad, levels = c(FALSE, TRUE))))
+                 )%>%
+  { colnames(.) <- c("FALSE", "TRUE"); rownames(.)<-NULL; . }
+#         FALSE        TRUE
+# 1 4500 (94.0)   288 (6.0)
+# 2 4427 (92.5)   361 (7.5)
+# 3 4457 (93.1)   331 (6.9)
+# 4 4440 (92.7)   348 (7.3)
+# 5 3108 (64.9) 1680 (35.1)
+# 6 3892 (81.3)  896 (18.7)
+# 7 3785 (79.1) 1003 (20.9)
+
+first_episode_tsm_1_sem_tsm_rec<-
+agregar_columnas_icd(first_episode_tsm_1_sem_tsm)
+
+prim_sem_tsm_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec$personalidad, levels = c(FALSE, TRUE))))
+                 )%>%
+  { colnames(.) <- c("FALSE", "TRUE"); rownames(.)<-NULL; . }
+#        FALSE       TRUE
+# 1 320 (90.4)   34 (9.6)
+# 2 308 (87.0)  46 (13.0)
+# 3 329 (92.9)   25 (7.1)
+# 4 331 (93.5)   23 (6.5)
+# 5 241 (68.1) 113 (31.9)
+# 6 299 (84.5)  55 (15.5)
+# 7 288 (81.4)  66 (18.6)
+
+first_episode_com_rec<-
+    agregar_columnas_icd(first_episode_com)
+
+prim_trim_com_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_com_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec$personalidad, levels = c(FALSE, TRUE))))
+                 )%>%
+  { colnames(.) <- c("FALSE", "TRUE"); rownames(.)<-NULL; . }
+
+#        FALSE       TRUE
+# 1   18 (8.5) 194 (91.5)
+# 2 193 (91.0)   19 (9.0)
+# 3 175 (82.5)  37 (17.5)
+# 4 197 (92.9)   15 (7.1)
+# 5 182 (85.8)  30 (14.2)
+# 6 197 (92.9)   15 (7.1)
+# 7 146 (68.9)  66 (31.1)
+
+
+first_episode_tus_rec<-
+    agregar_columnas_icd(first_episode_tus)
+
+  format_table_vec(table(factor(first_episode_rec$personalidad, levels = c(FALSE, TRUE))))
+
+prim_trim_tus_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tus_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec$personalidad, levels = c(FALSE, TRUE))))
+                 )%>%
+  { colnames(.) <- c("FALSE", "TRUE"); rownames(.)<-NULL; . }
+#       FALSE       TRUE
+# 1  20 (2.9) 664 (97.1)
+# 2 684 (100)  684 (0.0)
+# 3 684 (100)  684 (0.0)
+# 4 684 (100)  684 (0.0)
+# 5 684 (100)  684 (0.0)
+# 6 684 (100)  684 (0.0)
+# 7 684 (100)  684 (0.0)
+
+# chisq_test(
+# cbind(
+# table(factor(first_episode_rec$organic, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$substance, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$esquizofrenia, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$otros_psicoticos, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$bipolares, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$depresivos, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$ansiedad, levels = c(FALSE, TRUE))),
+# table(factor(first_episode_rec$personalidad, levels = c(FALSE, TRUE)))
+# ))
+# #1 48304     3346.     0     7 Chi-square test ****    
+# 
+# fisher_test(cbind(
+#     table(factor(first_episode_1_trim_tsm_rec$organic, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_tsm_1_sem_tsm_rec$organic, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_com_rec$organic, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_tus_rec$organic, levels = c(FALSE, TRUE)))     
+# ), simulate.p.value = T, B=1e5)
+# #6722 0.00001 **** 
+# fisher_test(cbind(
+#     table(factor(first_episode_1_trim_tsm_rec$esquizofrenia, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_tsm_1_sem_tsm_rec$esquizofrenia, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_com_rec$esquizofrenia, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_tus_rec$esquizofrenia, levels = c(FALSE, TRUE)))    
+# ), simulate.p.value = T, B=1e5)
+# #1  6722     1404. 3.37e-304     3 Chi-square test ****    
+# chisq_test(cbind(
+#     table(factor(first_episode_1_trim_tsm_rec$otros_psicoticos, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_tsm_1_sem_tsm_rec$otros_psicoticos, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_com_rec$otros_psicoticos, levels = c(FALSE, TRUE))),
+#     table(factor(first_episode_tus_rec$otros_psicoticos, levels = c(FALSE, TRUE)))
+# ))
+
+# 6035. Un trimestre. TSM(4) (n=4.788)		6025. Un trimestre. TUS(3) (n=684)		5939. Un semestre TSM(1) (n=354)		5989. Comorbilidad un trimestre(2) (n=212)	
+cbind.data.frame(Total= tot_cie10_clas[,2],
+                 Prim_trim_tsm= prim_trim_tsm_clas[,2],
+                 Prim_trim_tus= prim_trim_tus_clas[,2],
+                 Prim_sem_tsm=  prim_sem_tsm_clas[,2],
+                 Prim_trim_com= prim_trim_com_clas[,2]
+                 ) |> 
+  knitr::kable("markdown")
+
+```
+
+
+
 Luego vemos la clasificación de PPOO por cluster
 
 ```{r 11c}
@@ -2474,6 +2795,20 @@ janitor::chisq.test(df_filled[,c("run","glosa_pueblo_originario")] %>%
         dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4")], by="run", multiple="first") %>% 
         janitor::tabyl(glosa_pueblo_originario, clus_pam_om4))
 # X-squared = 136.81, df = 24, p-value < 2.2e-16
+# 
+janitor::chisq.test(
+  df_filled[,c("run","glosa_pueblo_originario")] %>% 
+        dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4")], by="run", multiple="first") %>% 
+          dplyr::filter(glosa_pueblo_originario %in% c("RAPA NUI (PASCUENSE)", "MAPUCHE", "NINGUNO")) |> 
+        janitor::tabyl(glosa_pueblo_originario, clus_pam_om4)
+  )
+
+df_filled[,c("run","glosa_pueblo_originario")] %>% 
+    dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4")], by="run", multiple="first") %>% 
+    dplyr::filter(glosa_pueblo_originario %in% c("RAPA NUI (PASCUENSE)", "MAPUCHE", "NINGUNO")) |> 
+    janitor::tabyl(glosa_pueblo_originario, clus_pam_om4) |> 
+    janitor::adorn_percentages("col") |> 
+    dplyr::mutate(across(2:5, ~round(.,2)))
 
 invisible("No exclusivo de la clasificación por conglomerados, sino de las trayectorias en general y las matrices de distancia")
 #https://cran.r-project.org/web/packages/TraMineRextras/TraMineRextras.pdf
@@ -3915,12 +4250,14 @@ ggsave(filename= "_figs/asociaciones_pam_om4_q.png", plot_data_melt_pam_om4_q, w
 <br> 
 
 
-# Información de la sesión
+n# Información de la sesión
 
 ```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
 message(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
 message(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
 message(paste0("Editor context: ", getwd()))
+
+cat("quarto version: "); system("quarto --version") 
 
 save.image("avance250117.RData")
 ```

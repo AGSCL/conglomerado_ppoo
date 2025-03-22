@@ -42,7 +42,7 @@ if(!require(sqldf)){install.packages("sqldf");require(sqldf)}
 #                           "homolog_estab_misal", 
 #                           "df_estab_tab")))
 
-invisible("Cargar imagen")
+invisible("Cargar imagenes: necesito las dos")
 
 load("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/20240405.RData")
 load("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/20240903.RData")

@@ -1,0 +1,1280 @@
+---
+title: "Paso 1. Definir conjunto de datos"
+description: |
+  Se diagnosticó el problema con el código de establecimiento. Se analizan las fechas, se genera la variable año de ingreso, se filtran eventos hospitalarios con días de ingreso negativos, se descartan tiempos de estadía >1827 días, se recodifican caracteres vacíos en diagnósticos CIE-10, se descartan RUNs erróneos, se descartan pacientes con nacionalidades distintas a Chile, se utiliza la base de datos original para rescatar la variable `inclusivo_real_historico, que agrupa a tod@s los pacientes que se autoidentifican RSH o MINSAL desde 2010 y CONADI, unión preliminar con base de mortalidad y nacimientos
+date-format: "D [d]e MMM, YYYY"
+lang: es
+date: last-modified
+bibliography: [_lit/referencias.bib]
+csl: "_lit/american-medical-association.csl" # (Opcional: estilo de citas, p.ej., APA)
+author: "Andrés González Santa Cruz"
+format: 
+  html:
+    css: [_lib/styles.scss]
+    code-fold: true
+    embed-resources: true
+    fig-cap-location: top
+lightbox: auto
+toc: true
+toc-depth: 5
+toc-location: left
+toc-float: true
+editor: source
+---
+
+<style>
+.scrollable-content {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+<style>
+pre.scrollable-code {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+
+
+<div class="scrollable-content">
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+
+#remover imágenes
+while(!dev.cur())dev.off()
+cat("\014")
+
+```
+</div>
+
+# Instalar paquetes, etc.
+
+<div class="scrollable-content">
+```{r setup}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+
+#elegir repositorio
+if(Sys.info()["sysname"]=="Windows"){
+  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+}
+options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
+
+#borrar caché
+#system("fc-cache -f -v")
+
+if(Sys.info()["sysname"]=="Windows"){
+if (getRversion() != "4.4.0") { stop("Requiere versión de R 4.4.0. Actual: ", getRversion()) }
+}
+if(Sys.info()["sysname"]=="Linux"){
+if (getRversion() != "4.4.1") { stop("Requiere versión de R 4.4.1. Actual: ", getRversion()) }
+}
+
+# 0.Fechas y paquetes --------------------------------------------------
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+# paquetes en R
+
+if (Sys.info()["sysname"] == "Linux") {
+  # Verificar si librsvg-2.so.2 ya está instalado
+  librsvg_exists <- system("ldconfig -p | grep librsvg-2.so.2", ignore.stdout = TRUE, ignore.stderr = TRUE)
+ 
+  if (librsvg_exists != 0) {
+	message("librsvg no se encontró. Instalando librsvg2-dev...")
+	# Actualiza la lista de paquetes e instala librsvg2-dev
+	system("sudo apt-get update && sudo apt-get install -y librsvg2-dev")
+  } else {
+	message("librsvg ya está instalado.")
+  }
+}
+
+packages <- list(
+  # Manipulación de datos y vaisualización
+  data = c("dplyr", "lubridate", "ggplot2", "janitor", "ggalluvial", "tidytable", "purrr", "magrittr"),
+  
+  # Improtar datos
+  rio = c("arrow", "rio", "nanoparquet", "haven"),
+  
+  #Analisis_Secuencias_Clustering
+  clustering = c("TraMineR", "TraMineRextras", "ggseqplot",  "factoextra",
+                                     "cluster", "WeightedCluster", "NbClust"),
+  
+  # Diagramar
+  diagram = c("DiagrammeR", "rsvg", "DiagrammeRsvg", "webshot", "gtsummary", "cowplot", 
+                          "grid", "gridExtra", "kableExtra"),
+  
+  # Analizar
+  analysis = c("epiR", "naniar", "psych", "pROC", "caret", "boot", 
+               "parallel", "tableone", "sqldf"),
+  
+  #optimización y desarrollo
+  pacakge_develop = c("devtools", "job", "foreach", "doParallel", "progressr"),
+  
+  # Modelamiento y ML
+  ml = c("SuperLearner", "glmnet", "randomForest", "missRanger",
+         "ranger", "dbarts", "lmtest", "emmeans", "effsize", "rstatix", "stargazer"),
+  
+  otros = c("chisq.posthoc.test", "Tmisc")
+)
+
+# Sys.setenv(CC = "/usr/bin/gcc-12", CXX = "/usr/bin/g++-12") #bajar de gcc 13 a 12
+# Sys.setenv(CXXFLAGS = "-O0") # ignorar error
+# Sys.setenv(CC = "clang", CXX = "clang++") # si no funciona lo otro, ambiar compilador
+#pak::pak("duckdb/duckdb-r")
+#install.packages("duckdb", repos = "https://duckdb.r-universe.dev")
+if(!require(duckdb)){pak::pkg_install("duckdb/duckdb-r@main?source=false")}
+
+pak::pak_sitrep()
+#pak::sysreqs_check_installed(unique(unlist(packages)))
+#pak::lockfile_create(unique(unlist(packages)), dependencies=T)
+#pak::lockfile_install("dependencies_ubuntu.lock")
+#pak::pak("duckdb/duckdb-r") #si hay error, github version
+#https://rdrr.io/cran/pak/man/faq.html
+#pak::cache_delete()
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+library(tidytable)
+
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+sum_dates <- function(x){
+ 
+  cbind.data.frame(
+	min= as.Date(min(unclass(as.Date(x)), na.rm=T), origin = "1970-01-01"),
+	p001= as.Date(quantile(unclass(as.Date(x)), .001, na.rm=T), origin = "1970-01-01"),
+	p005= as.Date(quantile(unclass(as.Date(x)), .005, na.rm=T), origin = "1970-01-01"),
+	p025= as.Date(quantile(unclass(as.Date(x)), .025, na.rm=T), origin = "1970-01-01"),
+	p25= as.Date(quantile(unclass(as.Date(x)), .25, na.rm=T), origin = "1970-01-01"),
+	p50= as.Date(quantile(unclass(as.Date(x)), .5, na.rm=T), origin = "1970-01-01"),
+	p75= as.Date(quantile(unclass(as.Date(x)), .75, na.rm=T), origin = "1970-01-01"),
+	p975= as.Date(quantile(unclass(as.Date(x)), .975, na.rm=T), origin = "1970-01-01"),
+	p995= as.Date(quantile(unclass(as.Date(x)), .995, na.rm=T), origin = "1970-01-01"),
+	p999= as.Date(quantile(unclass(as.Date(x)), .999, na.rm=T), origin = "1970-01-01"),
+	max= as.Date(max(unclass(as.Date(x)), na.rm=T), origin = "1970-01-01")
+  )
+}
+```
+</div>
+
+Traemos las bases de datos, junto con algunas bases de referencia para contrastar el código de establecimiento.
+
+
+```{r import-databases}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+
+invisible("Traemos la base de datos")
+if (Sys.info()["sysname"] == "Linux") {
+#dtX2023_12_05_DatosEgresosHosp_encrip<-rio::import("~/workspace/extracted/20231205_hosp_mod20240404.parquet.gzip")
+dtX2023_12_05_DatosEgresosHosp_encrip<-rio::import("~/Documents/un_inv_ii/20231205_hosp_mod20240404.parquet.gzip")
+
+} else {
+dtX2023_12_05_DatosEgresosHosp_encrip<-rio::import("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_ii/20231205_hosp_mod20240404.parquet.gzip")
+}
+
+invisible("Convertimos a tidytable")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip<-tidytable::as_tidytable(dtX2023_12_05_DatosEgresosHosp_encrip)
+
+invisible("Eliminamos la base original")
+rm(dtX2023_12_05_DatosEgresosHosp_encrip)
+
+
+cnt_runs_original_bd<- paste0('Base de datos original\n(n= ',
+                          	formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip),
+                                  	format='f', big.mark='.', digits=0),
+                          	';\np= ',
+                          	formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip$run)),
+                                  	format='f', big.mark='.', digits=0),')')
+
+cat("Base de datos original: ", cnt_runs_original_bd)
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+# Importar planillas de referencias
+
+homolog_estab_misal<-
+  readr::read_delim("https://docs.google.com/spreadsheets/d/1Ztg38BGjUzbY7acVfh4rXaXYaOi8EBuX/export?format=tsv&id=1Ztg38BGjUzbY7acVfh4rXaXYaOi8EBuX&gid=243483182")
+
+homolog_estab_misal2<-
+  rio::import("https://repositoriodeis.minsal.cl/Egresos/egr2018/Establecimientos_2018.xlsx", skip=2)
+```
+
+# Exploración de variables
+
+Exploramos los códigos de establecimiento.
+
+<div class="scrollable-content">
+```{r probar-codigos-establecimiento}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+
+df_estab_tab<-
+  data.frame(estab = c("20101", "11322", "20108", "11324", "11299",
+                   	"12520", "20072", "20008", "20086", "10122", "12670", "20028",
+                   	"20070", "20056", "13320", "11415", "12222", "10120", "10222",
+                   	"20055", "11505", "10726", "11020", "11851", "11298", "12105",
+                   	"20019", "11821", "11421", "11524", "12427", "20088", "10526",
+                   	"13317", "11317", "12438", "11321", "10325", "10123", "20009",
+                   	"10420", "11605", "11016", "12414", "11420", "10711", "11850",
+                   	"20071", "11135", "10820", "11222", "12413", "11250", "12411",
+                   	"12412", "11027", "10620", "11227", "11251", "20006", "11316",
+                   	"20023", "11720", "11014", "13316", "10424", "11122", "11620",
+                   	"11011", "10621", "10121", "11252", "11127", "20005", "12425",
+                   	"20048", "12426", "12421", "11722", "11225", "11626", "12320",
+                   	"11315", "12020", "11226", "10520", "12810", "12112", "12620",
+                   	"11511", "10322", "11013", "11520", "10220", "11015", "11313",
+                   	"11121", "11319", "11223", "11123", "10321", "12811", "11119",
+                   	"10320", "11295", "11611", "12510", "12220", "13315", "11253",
+                   	"11422", "11522", "12610", "11318", "10110", "10722", "11129",
+                   	"11012", "10721", "10210", "10720", "11820", "10410", "12111",
+                   	"12310", "11920", "12910", "12120", "12410", "10810", "11010",
+                   	"11910", "11120", "11310", "12110", "10310", "12210", "11710",
+                   	"12010", "11110", "10610", "11510", "10910", "10510", "11220",
+                   	"10710", "11221", "11810", "11210", "10920", "11610", "11224",
+                   	"11410"), N = c(7L, 12L, 20L, 40L, 81L, 130L, 177L, 217L, 253L,
+                                   	316L, 343L, 356L, 414L, 424L, 514L, 672L, 754L, 834L, 861L, 903L,
+                                   	1026L, 1099L, 1108L, 1160L, 1179L, 1318L, 1382L, 1716L, 1761L,
+                                   	1877L, 1903L, 1908L, 1939L, 2042L, 2340L, 2429L, 2840L, 3237L,
+                                   	3338L, 3346L, 4233L, 4908L, 5047L, 5258L, 5756L, 6198L, 8711L,
+                                   	9834L, 12308L, 14392L, 14754L, 16860L, 16941L, 17283L, 18390L,
+                                   	18742L, 19534L, 19665L, 20479L, 23436L, 27280L, 30599L, 31122L,
+                                   	32395L, 32785L, 37368L, 41431L, 43325L, 45871L, 48662L, 49670L,
+                                   	54006L, 55998L, 57785L, 58999L, 61626L, 62635L, 62694L, 64885L,
+                                   	65813L, 70873L, 72200L, 72871L, 75273L, 78741L, 80268L, 82327L,
+                                   	83472L, 83766L, 85091L, 85798L, 86067L, 88111L, 92155L, 92219L,
+                                   	94552L, 99875L, 100482L, 103289L, 113754L, 115545L, 118843L,
+                                   	119607L, 124310L, 124616L, 132381L, 136659L, 137991L, 139533L,
+                                   	141248L, 149348L, 163003L, 173218L, 192180L, 194013L, 196945L,
+                                   	199321L, 212805L, 217793L, 220425L, 225061L, 232988L, 238888L,
+                                   	241729L, 242146L, 251703L, 260169L, 271394L, 284613L, 289526L,
+                                   	289897L, 338601L, 344860L, 362856L, 388455L, 388511L, 403107L,
+                                   	419655L, 428265L, 434467L, 480636L, 521708L, 524143L, 559438L,
+                                   	573410L, 613708L, 620132L, 629497L, 682962L, 736874L, 743064L,
+                                   	764587L, 945032L))
+
+invisible("adaptar el código")
+invisible("unir bases de datos originales ")
+df_estab_tab|>
+  tidytable::mutate(estab_homo_rec= gsub("^([0-9]{2})([0-9]{3})$", "\\1-\\2", estab))|>
+  tidytable::left_join(homolog_estab_misal[,1:2], by=c("estab_homo_rec"="Código Antiguo Establecimiento"))
+
+df_estab_tab|>
+  tidytable::mutate(estab_homo_rec= gsub("^([0-9]{2})([0-9]{3})$", "\\1-\\2", estab))|>
+  tidytable::inner_join(tidytable::mutate(homolog_estab_misal[,1:2],
+                              	cod_est=stringr::str_sub(`Código nuevo Establecimiento`,2,6)), by=c("estab"="cod_est"))
+invisible("No funcionó, encontré 36; 115 no")
+
+invisible("Qué pasa si le quito el primer dígito a Código Establecimiento?")
+df_estab_tab|>
+  tidytable::mutate(estab_homo_rec2= as.numeric(estab))|>
+  tidytable::inner_join(tidytable::mutate(homolog_estab_misal2, cod_est=
+                                	stringr::str_sub(`Código Establecimiento`,2,6)), by=c("estab"="cod_est"))|>
+  nrow()
+invisible("Sólo uno 8")
+
+invisible("Si uno quitando el último dígito?")
+df_estab_tab|>
+  tidytable::mutate(estab_homo_rec2= as.numeric(estab))|>
+  tidytable::inner_join(tidytable::mutate(homolog_estab_misal2, cod_est=
+                                	stringr::str_sub(`Código Establecimiento`,1,5)), by=c("estab"="cod_est"))|>
+  nrow()-
+  (df_estab_tab|>
+ 	tidytable::mutate(estab_homo_rec2= as.numeric(estab))|>
+ 	tidytable::inner_join(tidytable::mutate(homolog_estab_misal2, cod_est=
+                                   	stringr::str_sub(`Código Establecimiento`,1,5)), by=c("estab"="cod_est"))|>
+ 	distinct(estab)|>nrow())
+invisible("No une 1:1, deja muchos duplicados")
+```
+</div>
+
+## Definimos fechas
+
+```{r dates}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24 <-
+  lubridate::parse_date_time(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso, orders = c("dmy", "mdy", "Bdy"))
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24 <-
+  lubridate::parse_date_time(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso, orders = c("dmy", "mdy", "Bdy"))
+warnings()
+
+#
+# identical(dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec242 ,
+#       	dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24)
+#[1] TRUE
+
+# identical(dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec242 ,
+#       	dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24)
+# #[1] FALSE
+#
+# # Warning message:
+# #   6 failed to parse.
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed<-
+  lubridate::time_length(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24-
+                       	tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24, unit="days")
+# #   	Min.	1st Qu. 	Median   	Mean	3rd Qu.   	Max.   	NA's
+# # -20862.000  	1.000  	3.000  	6.325 	11.000  19457.000     	91
+#
+summary(tt_dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed)
+#  	Min.	1st Qu. 	Median   	Mean	3rd Qu.   	Max.   	NA's
+# -20832.000  	1.000  	3.000  	5.901  	5.000  19457.000     	91
+
+# paste0("Percentil 1 y 99: ",
+#    	as.numeric(quantile(dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed, .01, na.rm=T)),", ",
+#    	as.numeric(quantile(dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed, .99, na.rm=T))
+#    	)
+# #[1] "Percentil 1 y 99: -263, 276"
+#
+# dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed2<-
+#   lubridate::time_length(dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec242-
+#                        	dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec242, unit="days")
+# summary(dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed2)
+# #   	Min.	1st Qu. 	Median   	Mean	3rd Qu.   	Max.   	NA's
+# # -20832.000  	1.000  	3.000  	5.901  	5.000  19457.000     	91
+# #
+#
+# paste0("Percentil 1 y 99: ",
+#    	as.numeric(quantile(dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed2, .01, na.rm=T)),", ",
+#    	as.numeric(quantile(dtX2023_12_05_DatosEgresosHosp_encrip$days_elapsed2, .99, na.rm=T))
+# )
+# #[1] "Percentil 1 y 99: 0, 49"
+
+invisible("Recodificar fechas a numérico")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24_num<-
+  as.numeric(unclass(as.Date.character(as.character(substr(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24, 1, 10)))))
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24_num<-
+  as.numeric(unclass(as.Date.character(as.character(substr(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24, 1, 10)))))
+invisible("Recodificar fechas a Date (no tengo horas y segundos)")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24<-
+  as.Date.character(as.character(substr(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24, 1, 10)))
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24<-
+  as.Date.character(as.character(substr(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24, 1, 10)))
+
+invisible("Dividir en secciones")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24_cut<-
+  cut(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24_num,
+  	breaks= 30, dig.lab = 4, ordered_result= T)
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24_cut<-
+  cut(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24_num,
+  	breaks= 30, dig.lab = 4, ordered_result= T)
+
+labs <- levels(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24_cut)
+labs_date<- paste0(as.Date(as.numeric( sub("\\((.+),.*", "\\1", labs)), origin = "1970-01-01"),";\n",
+               	as.Date(as.numeric( sub("[^,]*,([^]]*)\\]", "\\1", labs)), origin = "1970-01-01"))
+labs2 <- levels(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_egreso_rec24_cut)
+labs2_date<- paste0(as.Date(as.numeric( sub("\\((.+),.*", "\\1", labs2)), origin = "1970-01-01"),";\n",
+                	as.Date(as.numeric( sub("[^,]*,([^]]*)\\]", "\\1", labs2)), origin = "1970-01-01"))
+
+```
+
+Eliminamos días de atención negativos
+
+```{r dates2}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+invisible("REsultó estar malo la fecha de egreso de Python, al 2024-03-31, pero el de ingreso sí")
+
+invisible("Filtrar la base de datos para dejar fechas realistas de egresos")
+invisible("Sacar eventos hospitalarios con tiempos de estadía negativos")
+disc_negative_tr_days<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip|>
+  tidytable::filter(days_elapsed<0)|>
+  nrow()
+cat("Días de atención negativos: ", disc_negative_tr_days)
+```
+
+Generamos año de ingreso y hacemos un filtro descartando esos casos. Posteriormente, descartamos días en tratamiento superiores a 5 años.
+
+```{r dates3}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+invisible("Generar año de ingreso")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip$ing_year<- lubridate::epiyear(tt_dtX2023_12_05_DatosEgresosHosp_encrip$fecha_ingreso_rec24)
+
+
+invisible("Hacemos el filtro")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s1<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip|>
+  tidytable::filter(days_elapsed>=0)
+
+cnt_runs_s1<- paste0('Base de datos \n(n= ',
+                 	formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s1),
+                         	format='f', big.mark='.', digits=0),
+                 	';\np= ',
+                 	formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s1$run)),
+                         	format='f', big.mark='.', digits=0),')')
+
+cnt_runs_s1
+
+disc_large_tr_days <-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s1|>
+  tidytable::filter(days_elapsed>=1827)|>
+  nrow()
+disc_large_tr_days
+#[1] 1001
+
+```
+
+```{r discard-table}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+#rm("tt_dtX2023_12_05_DatosEgresosHosp_encrip");gc()
+```
+
+## Obtener de ingresos anteriores a 2017 a gente que haya tenido diagnósticos COC, OH, MAR, CP o PSY y descartar <5 años
+
+
+```{r excluir-mh-sud-2017}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+disc_dates_2017_22_df <-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip|>
+  filter(fecha_ingreso_rec24<"2018-01-01")
+
+cat("Número de filas de ingresos anteriores de 2018")
+formatC(nrow(disc_dates_2017_22_df), format='f', big.mark='.', digits=0)
+
+cat("Número de registros de ingresos anteriores de 2018 y con diagnósticos relacionados con TSM/TUS")
+formatC(subset(disc_dates_2017_22_df, subset= alphabet!="otro", select="run")|> nrow(), format='f', big.mark='.', digits=0)
+cat("para tener los RUNs anteriores a 2018")
+disc_dates_2017_22_df1<-
+  subset(disc_dates_2017_22_df, select="run")|> distinct(run)
+
+cat("Número de usuarios con registros de ingresos anteriores de 2018 y con diagnósticos relacionados con TSM/TUS")
+disc_dates_2017_22_df2<-
+  subset(disc_dates_2017_22_df, subset= alphabet!="otro", select="run")|> distinct(run)
+cat("Número de usuarios con ingresos anteriores a 2018 aunque relacionados con TSM/TUS")
+formatC(nrow(disc_dates_2017_22_df2), format='f', big.mark='.', digits=0)
+message("Guardar disc_dates_2017_22_df2 porque servirá posteriormente")
+
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s1 |>
+  filter(days_elapsed<1827)
+
+cnt_runs_s2<- paste0('Base de datos \n(n= ',
+                 	formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2),
+                         	format='f', big.mark='.', digits=0),
+                 	';\np= ',
+                 	formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2$run)),
+                         	format='f', big.mark='.', digits=0),')')
+
+cnt_runs_s2
+```
+
+
+## Sacar fechas de ingreso anteriores a 2017
+
+
+```{r excluir-mh-sud-2017-1-borrar-obj}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+rm(list = setdiff(ls(), c(
+"cnt_runs_original_bd",
+"disc_negative_tr_days",
+"cnt_runs_s1",
+"disc_large_tr_days",
+"cnt_runs_s2",
+"tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2",
+"tt_dtX2023_12_05_DatosEgresosHosp_encrip",
+"homolog_estab_misal",
+"disc_dates_2017_22_df2", #agregado 2024-04-01
+"df_estab_tab", 
+"labs", 
+"labs2", 
+"labs_date", 
+"labs2_date")))
+```
+
+Generamos el objeto `disc_dates_2017_22` que contiene el recuento de los registros anteriores al 2018.
+
+```{r excluir-mh-sud-2017-1-alojar-obj-recuento}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+disc_dates_2017_22 <-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2|>
+  filter(fecha_ingreso_rec24<"2018-01-01")|>
+  nrow()
+
+message("registros anteriores a 2018")
+formatC(disc_dates_2017_22, format='f', big.mark='.', digits=0)
+#13245183
+#[1] fecha mínima "2005-02-23 UTC"
+```
+
+## Filtro >=2018
+
+```{r recuento-filtro-2018-s3}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2|>
+  filter(fecha_ingreso_rec24>="2018-01-01") 
+#[1] 7708894
+
+message("Filtrando directamente desde la base original:")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip|>
+  filter(fecha_ingreso_rec24>="2018-01-01") |> nrow()
+message("Filtrando directamente desde la base original, usuarios:")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip|>
+  filter(fecha_ingreso_rec24>="2018-01-01") |> distinct(run) |> nrow()
+
+cnt_runs_s3<- paste0('Base de datos \n(n= ', 
+                     formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3), 
+                             format='f', big.mark='.', digits=0), 
+                     ';\np= ',
+                     formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3$run)), 
+                             format='f', big.mark='.', digits=0),')')
+
+cnt_runs_s3
+```
+
+```{r discard-s2}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+rm("tt_dtX2023_12_05_DatosEgresosHosp_encrip_s2");gc()
+```
+
+Corregimos CIE-10, de manera que aquellas columnas que tienen el caracter "None" se reemplazan por un valor inválido (NA).
+
+```{r cie-10-corregir}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+
+for(i in 1:11){
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3[[paste0("diag",i)]]<-
+    ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3[[paste0("diag",i)]]=="None",
+           NA,
+           tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3[[paste0("diag",i)]])
+}
+```
+
+## Eliminar RUNs erróneos
+
+Se eliminan RUNs erróneos: 1bad6b8cf97131fceab8543e81f7757195fbb1d36b376ee994ad1cf17699c464
+
+```{r run-erroneos}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+
+disc_run_erroneos<-
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3|>
+  filter(run =="1bad6b8cf97131fceab8543e81f7757195fbb1d36b376ee994ad1cf17699c464")|>
+  nrow()
+
+message("Registros con RUNs erróneos")
+formatC(disc_run_erroneos, format='f', big.mark='.', digits=0)
+
+message("Registros con RUNs erróneos, de la base original")
+formatC(nrow(filter(tt_dtX2023_12_05_DatosEgresosHosp_encrip, run =="1bad6b8cf97131fceab8543e81f7757195fbb1d36b376ee994ad1cf17699c464")), format='f', big.mark='.', digits=0)
+
+```
+
+Generamos la nueva base `tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4`, descartando RUNs erróneos.
+
+```{r }
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3|>
+  # mutate(fecha_egreso_rec24_cut= factor(fecha_egreso_rec24_cut, labels=labs2_date))|>
+  # mutate(fecha_ingreso_rec24_cut= factor(fecha_ingreso_rec24_cut, labels=labs2_date))|>
+  filter(!run =="1bad6b8cf97131fceab8543e81f7757195fbb1d36b376ee994ad1cf17699c464")
+```
+
+Descartamos la base s3
+
+```{r discard-s3}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+rm("tt_dtX2023_12_05_DatosEgresosHosp_encrip_s3");gc()
+```
+
+### Recodificación de PPOO de manera inclusiva.
+
+Recodificamos RSH para descartar perdidos (NAs) y dejarlos como 0. Si en variable MINSAL `pueblo_originario` tiene un código 96 (NINGUNO), se codifica como 0, y si es distinto, como 1. Luego, generamos la columna `inclusivo_rec` que indica si ha sido reconocido por CONADI en el registro de Calidades Indígenas (`ci_conadi`) o Asociaciones Indígenas (`cya_conadi`).
+
+```{r recodifica-ppoo}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$pueblo_originario_rec<- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$pueblo_originario!=96,1,0)
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$rsh_rec<- 
+  ifelse(is.na(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$rsh),0,tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$rsh)
+
+invisible("generamos un criterio inclusivo")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$inclusivo_rec<-
+  ifelse(rowSums(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4[,c("cya_conadi","ci_conadi")], na.rm=T)>0,1,0)
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4$inclusivo_rec<-
+  ifelse(rowSums(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4[,c("cya_conadi","ci_conadi")], na.rm=T)>0,1,0)
+
+```
+
+
+## Filtro país de origen Chile
+
+Dada las dificultades de rastrear trayectorias de personas migrantes, filtramos a aquellos que hubiesen tenido nacionalidad distinta a la Chilena. Si hay al menos un registro en el que no se hayan identificado como Chilen@s, el registro es decartado. Estos cambios quedan registrados en la base `dtX2023_12_05_DatosEgresosHosp_encrip_s5`. Se hizo un cambio el 2025, consistente en incorporar aquellos casos con NAs como chilenos, dada la gran cantidad de NAs en registros anteriores a 2018.
+
+```{r filtro-chilene}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+# tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5<-
+# tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4|>
+#   mutate(nac_chile= ifelse(grepl("CHILE", glosa_pais_origen),1,0))|>
+#   group_by(run)|> 
+#   mutate(perc_nac_cl= sum(nac_chile)/n())|>
+#   ungroup()|> 
+#   filter(perc_nac_cl==1)
+
+#Añado filas mediante un criterio más inclusivo: 417
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5 <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4 |> 
+  group_by(run) |> 
+  mutate(perc_nac_cl = sum(grepl("CHILE", glosa_pais_origen, fixed = TRUE), na.rm = TRUE) / 
+                       sum(!is.na(glosa_pais_origen))) |> 
+  ungroup()|> 
+  filter(perc_nac_cl == 1)
+
+```
+
+A continuación, presentamos el recuento de datos de la base resultante:
+
+```{r presentacion-datos-filtro-chilene}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+
+result <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4|>
+  anti_join(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5, by = "row_num_index")|>
+  tidytable::summarise(nrow_count = n())
+print(result) #296487
+
+result2 <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4[, .(
+    nac_chile = sum(grepl("CHILE", glosa_pais_origen, fixed = TRUE), na.rm = TRUE),
+    total_no_na = sum(!is.na(glosa_pais_origen))
+), by = run][
+    (nac_chile / total_no_na) < 1, .N
+]
+print(result2) #194166
+#   unique_count
+# 1       194339
+
+cat("Filas eliminadas y cuántos RUN únicos en la tabla tienen al menos un registro que no es de Chile")
+disc_nac_nocl<- paste0('(n= ', formatC(as.numeric(result), format='f', big.mark='.', digits=0), 
+                     ' p= ',formatC(as.numeric(result2), format='f', big.mark='.', digits=0),')')
+
+disc_nac_nocl
+
+cnt_runs_s5<- paste0('Base de datos \n(n= ', 
+                     formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5), 
+                             format='f', big.mark='.', digits=0), 
+                     ';\np= ',
+                     formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5$run)), 
+                             format='f', big.mark='.', digits=0),')')
+cnt_runs_s5
+```
+
+Descartamos la base s4
+
+```{r discard-s4}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+rm("tt_dtX2023_12_05_DatosEgresosHosp_encrip_s4");gc()
+```
+
+Ahora vemos cuántos RUN únicos en la tabla tienen al menos un registro que no es de Chile en relación a la base de datos original, y cuantos registros abarcan a este tipo de usuarios.
+
+```{r nacionalidad-chilena-total-base-datos}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+gc()
+
+runs_no_100_chile <- tt_dtX2023_12_05_DatosEgresosHosp_encrip[, .(
+    nac_chile = sum(grepl("CHILE", glosa_pais_origen, fixed = TRUE), na.rm = TRUE),
+    total_no_na = sum(!is.na(glosa_pais_origen))
+  ), by = run][(nac_chile / total_no_na) < 1, run]
+
+result_total <- tt_dtX2023_12_05_DatosEgresosHosp_encrip[run %in% runs_no_100_chile, .N]
+
+formatC(result_total, format='f', big.mark='.', digits=0)#"734.676"
+
+gc()
+
+formatC(length(runs_no_100_chile), format='f', big.mark='.', digits=0) #231.757
+```
+
+Hacemos un recuento de los usuarios pertenecientes a PPOO.
+
+```{r info-ppoo-s5}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+# Grupo hash_ppoo_conadi
+hash_ppoo_conadi <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[inclusivo_rec == 1, unique(run)]
+usuarios_ppoo_conadi <- length(hash_ppoo_conadi)
+episodios_ppoo_conadi <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[run %in% hash_ppoo_conadi, .N]
+
+# Grupo hash_no_ppoo
+hash_no_ppoo <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[inclusivo_rec == 0 & pueblo_originario_rec == 0 & rsh_rec == 0, unique(run)]
+usuarios_no_ppoo <- length(hash_no_ppoo)
+episodios_no_ppoo <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[run %in% hash_no_ppoo, .N]
+
+# Grupo hash_no_ppo_flex
+hash_no_ppo_flex <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[inclusivo_rec == 0, unique(run)]
+usuarios_no_ppo_flex <- length(hash_no_ppo_flex)
+episodios_no_ppo_flex <- tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[run %in% hash_no_ppo_flex, .N]
+
+# Mostrar resultados
+cat("Número usuarios hash_ppoo_conadi:", length(hash_ppoo_conadi), "\n")
+cat("Episodios:", tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5[run %in% hash_ppoo_conadi, .N], "\n\n")
+
+cat("Número usuarios hash_no_ppoo:", usuarios_no_ppoo, "\n")
+cat("Episodios:", episodios_no_ppoo, "\n\n")
+
+cat("Número usuarios hash_no_ppo_flex:", usuarios_no_ppoo, "\n")
+cat("Episodios:", episodios_no_ppo_flex, "\n")
+
+
+```
+
+## Filtramos usuarios con determinado tramo de edad en el año 2018 y con un ingreso relacionado a TSM/TUS
+
+Originalmente, seleccionábamos los RUNs basado en la primera hospitalización de cada persona, evitando duplicados. El problema es que muchas personas tenían hospitalizaciones anteriores a 2018 y eran sin quererlo descartadas por este método. Por tanto, seguimos conservando las hospitalizaciones del 2018, con personas entre 15 y 29 años, especificando que la edad debe estar en Años (no meses o días), con diagnósticos relacionados con TSM/TUS. Posteriormente, se descartan RUNs de personas que tuvieron diagnósticos TSM/TUS antes del año 2018. La base que resulta de eso se llama `tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a`. Ojo que nos quedamos con una observaciones de esas que cumplen con las condiciones por RUN. Por otro lado, ya no filtramos por condición al egreso.
+
+```{r}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+library(tidytable)
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a <-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5 |>
+  # Tomar solo la primera fila por cada persona (run)
+  #slice.(1, .by = run) |>
+  # Filtrar casos específicos del año 2018, edad entre 15 y 29 años, tipo de edad en años, y alphabet distinto de "otro"
+  filter(
+    ing_year == 2018,
+    glosa_tipo_edad %like% "Años",
+    edad_anos >= 15,
+    edad_anos <= 29,
+    alphabet != "otro"
+  ) |>
+  # Excluir personas con complicaciones previas según listado en disc_dates_2017_22_df2
+  filter(!run %in% disc_dates_2017_22_df2$run)|>
+  group_by(run) |>
+  slice(1) |>
+  ungroup()
+
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a_prev<-
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5 |>
+group_by(run) |>
+  slice(1) |>
+  ungroup() |>
+  filter(
+    case_when(ing_year==2018 & grepl("Años",glosa_tipo_edad) & edad_anos>=15 & edad_anos<=29 & alphabet!="otro"~TRUE,TRUE~FALSE)
+  ) |>
+  #2024-04-02: eliminar casos con complicaciones previas al 2018
+  filter(!run %in% disc_dates_2017_22_df2$run) 
+```
+
+
+Ahora transformamos ciertas variables para tener un criterio inclusivo e histórico (aprovechando todos los registros) de la pertenencia a PPOO (`inclusivo_real_historico`).
+
+```{r ppoo-inclusivo-historico-s5}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+filtered_df_csv <- readr::read_csv("filtered_df.csv", col_types = readr::cols(...1 = readr::col_skip()))
+colnames(filtered_df_csv)<- c("rn", "run")
+
+filtered_df_csv <- rio::import("filtered_df.csv.7z")
+
+invisible("Incorporar una variable que indique si la base de datos desde 2010 indica pertenecer a PPOO por MINSAL o RSH al menos una vez")
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a$ppoo_minsal_y_rsh_2010 <- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a$run %in%  filtered_df_csv$run,1,0)
+# table(dtX2023_12_05_DatosEgresosHosp_encrip_s5a$ppoo_minsal_y_rsh_2010)
+#    0    1 
+# 5014 1056  
+#    0    1 
+# 6579 1475 
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a$inclusivo_real_historico <- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a$ppoo_minsal_y_rsh_2010>0 | 
+           tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a$inclusivo_rec>0,1,0)
+#    0    1 
+# 6419 1635 
+```
+
+
+# Generamos la base de datos para análisis
+
+Pero antes, generamos una base subsidiaria que cuenta las ocurrencias de ingresos cuyos diagnósticos se vinculan a TSM/TUS (mediante las variables `_rec3`).
+
+```{r ocurrencias-tsm-o-tsmytus-s5}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a2<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a|>
+  # dplyr::mutate(across(
+  #   .cols = diag1:diag11,
+  #   .fns = ~ dplyr::case_when(grepl("F14|R782|T405", .x)~"coc",
+  #                             grepl("F12|T407", .x)~"mar",
+  #                             grepl("F10|T510",.x)~"oh",
+  #                             grepl(psych_comorbidity_pattern, .x)~"psy",
+  #                             T~""),
+  #   .names = "{.col}_rec3")) %>%
+  rowwise() |>
+  mutate(
+    sum_occurrences = sum(c_across(ends_with("rec3")) %in% c("coc", "mar", "oh"), na.rm = TRUE),
+    recoded = as.integer(sum_occurrences > 0)
+  ) |>
+  mutate(
+    sum_occurrences2 = sum(c_across(ends_with("rec3")) %in% c("coc", "mar", "oh","psy"), na.rm = TRUE),
+    recoded2 = as.integer(sum_occurrences2 > 0)
+  ) |>
+  ungroup()
+```
+
+
+De ella, obtenemos columnas de nuestro alfabeto `_rec32` para los diagnósticos CIE-10, desde el primero al onceavo. También obtenemos columnas capaces de detectar si algún trastorno estuvo relacionado con autolesiones (`_rec42`). Por cada usuario y registro de tratamiento, sumamos diagnósticos relacionados con TUS (`sum_tus2`), con consumo de Cocaína y derivados, Marihuana y Alcohol (`sum_coc2`, `sum_mar2`, `sum_oh2`, respectivamente), diagnósticos que incluyen TUS y TSM (`sum_tus_psy2`), reconocimiento por parte la CONADI en sus dos variantes CI y CyA (`sum_conadi2`) o si hay autolesiones (`sum_autolesiones`). Una vez hecho esto, recodificamos de forma binaria para señalar si hay o no diagnósticos vinculados a TUS (`recoded_rec`), si hay cualquier diagnóstico TSM o TUS (`recoded2_rec`) o si hay reconocimiento por parte de la CONADI (`ppo_conadi2`).
+
+Luego, definimos nuestra variable alfabeto (`alphabet`). Finalmente, descartamos eventos del 2022 en adelante.
+
+```{r generacion-s5-adult}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+#Trastornos mentales orgánicos, incluidos los sintomáticos(F00-09)', 
+#'trastorno esquizotípico y trastornos de ideas delirantes(F20-29),
+#'Trastornos del humor (afectivos)(F30-39)', 
+#'Trastornos neuróticos, secundarios a situaciones estresantes y somatomorfos(F40-49)', 
+#''Trastornos del comportamiento asociados a disfunciones fisiológicas y a factores somáticos(F50-59)'
+#''Trastornos de la personalidad y del comportamiento del adulto(F60-69)', 
+#'Retraso Mental(F70-79)', 
+#''Trastornos del Desarrollo Psicológico(F80-89)' , '
+#'#'Trs. del comportamiento y de las emociones de comienzo habitual en la infancia y adolescencia(F90-98)'.
+
+psych_comorbidity_pattern <- "F0[0-9]|F2[0-9]|F3[0-9]|F4[0-9]|F5[0-9]|F6[0-9]|F7[0-9]|F8[0-9]|F9[0-8]"
+
+
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5 |>
+  #filtramos por aquellas personas que el 2018 fueron ingresadas por primera vez por diagnósticos TSM/TUS
+  filter(run %in% tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a2$run) |>
+  #ordenamos la base
+  arrange(run, fecha_ingreso_rec24)|>
+  group_by(run) |>
+  mutate(rn= row_number()) |>
+  ungroup() |>
+  mutate(across(
+    .cols = diag1:diag11,
+    .fns = ~ case_when(grepl("F14|R782|T405", .x)~"coc",
+                              grepl("F12|T407", .x)~"mar",
+                              grepl("F10|T510",.x)~"oh",
+                              grepl(psych_comorbidity_pattern, .x)~"psy",
+                              T~""),
+    .names = "{.col}_rec32")) |>
+#2024-06-14: autoinflinjidas
+  mutate(across(
+    .cols = diag1:diag11,
+    .fns = ~ case_when(grepl("X6[0-9]|X7[0-9]|X8[0-4]", .x)~"lesion",
+                              T~""),
+    .names = "{.col}_rec42"))  |>
+  rowwise()  |>
+  mutate(
+    sum_tus2    = sum(c_across(ends_with("rec32")) %in% c("coc", "mar", "oh"), na.rm = TRUE),
+    sum_coc2           = sum(c_across(ends_with("rec32")) %in% c("coc"), na.rm = TRUE),
+    sum_mar2           = sum(c_across(ends_with("rec32")) %in% c("mar"), na.rm = TRUE),
+    sum_oh2            = sum(c_across(ends_with("rec32")) %in% c("oh"), na.rm = TRUE),
+    sum_tus_psy2       = sum(c_across(ends_with("rec32")) %in% c("coc", "mar", "oh","psy"), na.rm = TRUE),
+    sum_conadi2        = sum(c_across(ends_with("_conadi")), na.rm = TRUE),
+    recoded_rec        = as.integer(sum_tus > 0),
+    recoded2_rec       = as.integer(sum_tus_psy > 0),
+    ppo_conadi2        = as.integer(sum_conadi2 > 0),
+    sum_autolesiones       = sum(c_across(ends_with("rec42")) %in% c("lesion"), na.rm = TRUE)
+  )  |>
+  mutate(alphabet  = case_when(sum_coc2>0 & sum_coc2==sum_tus2 & sum_tus2==sum_tus_psy2~ "coc",
+                                             sum_mar2>0 & sum_mar2==sum_tus2 & sum_tus2==sum_tus_psy2~ "mar",
+                                             sum_oh2>0 & sum_oh2==sum_tus2 & sum_tus2==sum_tus_psy2~ "oh",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus2==sum_tus_psy2~ "psu",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) == 1 & sum_tus_psy2>sum_tus2~ "cp",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus_psy2>sum_tus2~ "cp_psu",
+                                             sum_tus_psy2>0 & sum_tus2==0~ "psy",
+                                             T~"otro")) %>% 
+  ungroup()  |>
+  #2024-07-04: sacar eventos del 2022
+  filter(ing_year<2022)
+
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5 |>
+  #filtramos por aquellas personas que el 2018 fueron ingresadas por primera vez por diagnósticos TSM/TUS
+  filter(run %in% tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a2$run) |>
+  #ordenamos la base
+  arrange(run, fecha_ingreso_rec24)|>
+  group_by(run) |>
+  mutate(rn= row_number()) |>
+  ungroup() |>
+  mutate(across(
+    .cols = diag1:diag11,
+    .fns = ~ case_when(grepl("F14|R782|T405", .x)~"coc",
+                              grepl("F12|T407", .x)~"mar",
+                              grepl("F10|T510",.x)~"oh",
+                              grepl(psych_comorbidity_pattern, .x)~"psy",
+                              T~""),
+    .names = "{.col}_rec32")) |>
+#2024-06-14: autoinflinjidas
+  mutate(across(
+    .cols = diag1:diag11,
+    .fns = ~ case_when(grepl("X6[0-9]|X7[0-9]|X8[0-4]", .x)~"lesion",
+                              T~""),
+    .names = "{.col}_rec42"))  |>
+  rowwise()  |>
+  mutate(
+    sum_tus2    = sum(c_across(ends_with("rec32")) %in% c("coc", "mar", "oh"), na.rm = TRUE),
+    sum_coc2           = sum(c_across(ends_with("rec32")) %in% c("coc"), na.rm = TRUE),
+    sum_mar2           = sum(c_across(ends_with("rec32")) %in% c("mar"), na.rm = TRUE),
+    sum_oh2            = sum(c_across(ends_with("rec32")) %in% c("oh"), na.rm = TRUE),
+    sum_tus_psy2       = sum(c_across(ends_with("rec32")) %in% c("coc", "mar", "oh","psy"), na.rm = TRUE),
+    sum_conadi2        = sum(c_across(ends_with("_conadi")), na.rm = TRUE),
+    recoded_rec        = as.integer(sum_tus > 0),
+    recoded2_rec       = as.integer(sum_tus_psy > 0),
+    ppo_conadi2        = as.integer(sum_conadi2 > 0),
+    sum_autolesiones       = sum(c_across(ends_with("rec42")) %in% c("lesion"), na.rm = TRUE)
+  )  |>
+  mutate(alphabet  = case_when(sum_coc2>0 & sum_coc2==sum_tus2 & sum_tus2==sum_tus_psy2~ "coc",
+                                             sum_mar2>0 & sum_mar2==sum_tus2 & sum_tus2==sum_tus_psy2~ "mar",
+                                             sum_oh2>0 & sum_oh2==sum_tus2 & sum_tus2==sum_tus_psy2~ "oh",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus2==sum_tus_psy2~ "psu",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) == 1 & sum_tus_psy2>sum_tus2~ "cp",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus_psy2>sum_tus2~ "cp_psu",
+                                             sum_tus_psy2>0 & sum_tus2==0~ "psy",
+                                             T~"otro")) %>% 
+  ungroup()  |>
+  #2024-07-04: sacar eventos del 2022
+  filter(ing_year<2022)
+
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_prev_adult<-
+  tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5 |>
+  #filtramos por aquellas personas que el 2018 fueron ingresadas por primera vez por diagnósticos TSM/TUS
+  filter(run %in% tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5a_prev$run) |>
+  #ordenamos la base
+  arrange(run, fecha_ingreso_rec24)|>
+  group_by(run) |>
+  mutate(rn= row_number()) |>
+  ungroup() |>
+  mutate(across(
+    .cols = diag1:diag11,
+    .fns = ~ case_when(grepl("F14|R782|T405", .x)~"coc",
+                              grepl("F12|T407", .x)~"mar",
+                              grepl("F10|T510",.x)~"oh",
+                              grepl(psych_comorbidity_pattern, .x)~"psy",
+                              T~""),
+    .names = "{.col}_rec32")) |>
+#2024-06-14: autoinflinjidas
+  mutate(across(
+    .cols = diag1:diag11,
+    .fns = ~ case_when(grepl("X6[0-9]|X7[0-9]|X8[0-4]", .x)~"lesion",
+                              T~""),
+    .names = "{.col}_rec42"))  |>
+  rowwise()  |>
+  mutate(
+    sum_tus2    = sum(c_across(ends_with("rec32")) %in% c("coc", "mar", "oh"), na.rm = TRUE),
+    sum_coc2           = sum(c_across(ends_with("rec32")) %in% c("coc"), na.rm = TRUE),
+    sum_mar2           = sum(c_across(ends_with("rec32")) %in% c("mar"), na.rm = TRUE),
+    sum_oh2            = sum(c_across(ends_with("rec32")) %in% c("oh"), na.rm = TRUE),
+    sum_tus_psy2       = sum(c_across(ends_with("rec32")) %in% c("coc", "mar", "oh","psy"), na.rm = TRUE),
+    sum_conadi2        = sum(c_across(ends_with("_conadi")), na.rm = TRUE),
+    recoded_rec        = as.integer(sum_tus > 0),
+    recoded2_rec       = as.integer(sum_tus_psy > 0),
+    ppo_conadi2        = as.integer(sum_conadi2 > 0),
+    sum_autolesiones       = sum(c_across(ends_with("rec42")) %in% c("lesion"), na.rm = TRUE)
+  )  |>
+  mutate(alphabet  = case_when(sum_coc2>0 & sum_coc2==sum_tus2 & sum_tus2==sum_tus_psy2~ "coc",
+                                             sum_mar2>0 & sum_mar2==sum_tus2 & sum_tus2==sum_tus_psy2~ "mar",
+                                             sum_oh2>0 & sum_oh2==sum_tus2 & sum_tus2==sum_tus_psy2~ "oh",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus2==sum_tus_psy2~ "psu",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) == 1 & sum_tus_psy2>sum_tus2~ "cp",
+                                             ((sum_coc2 > 0) + (sum_mar2 > 0) + (sum_oh2 > 0)) > 1 & sum_tus_psy2>sum_tus2~ "cp_psu",
+                                             sum_tus_psy2>0 & sum_tus2==0~ "psy",
+                                             T~"otro")) %>% 
+  ungroup()  |>
+  #2024-07-04: sacar eventos del 2022
+  filter(ing_year<2022)
+```
+
+Generamos en esta base de datos los criterios inclusivos históricos de PPOO (`inclusivo_real_historico`).
+
+```{r ppoo-s5-adult}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$ppoo_minsal_y_rsh_2010 <- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$run %in%  filtered_df_csv$run,1,0)
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$inclusivo_real_historico <- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$ppoo_minsal_y_rsh_2010>0 | 
+           tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$ppo_conadi2>0,1,0)
+  
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_prev_adult$ppoo_minsal_y_rsh_2010 <- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_prev_adult$run %in%  filtered_df_csv$run,1,0)
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_prev_adult$inclusivo_real_historico <- 
+  ifelse(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_prev_adult$ppoo_minsal_y_rsh_2010>0 | 
+           tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_prev_adult$ppo_conadi2>0,1,0)
+
+```
+
+Vemos cuántas observaciones y RUNs tiene la base `tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult`.
+
+```{r s5-adult-info}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| results: "hold"
+
+cnt_runs_s5_adult<- paste0('Base de datos final \n(n= ', 
+                     formatC(nrow(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult), 
+                             format='f', big.mark='.', digits=0), 
+                     ';\np= ',
+                     formatC(length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$run)), 
+                             format='f', big.mark='.', digits=0),')')
+
+cnt_runs_s5_adult
+#[1] "Base de datos final \n(n= 14.221;\np= 6.673)"
+
+cat("Registros por usuario:")
+
+summary(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult|>
+          group_by(run)|> 
+          mutate(n=n())|>
+          ungroup() |>
+          pull(n))
+
+cat("percentil 95, 11  hosp") #antes eran 7
+quantile(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult %>% 
+           group_by(run) %>% 
+           mutate(n=n()) %>% 
+           ungroup() %>% 
+           pull(n),.95)
+```
+
+<br>
+
+## Unión con base de nacimientos y defunciones
+
+
+```{r}
+def_enc17_21 <- readr::read_delim("_output/def_enc.csv", 
+                           delim = ";", escape_double = FALSE, trim_ws = TRUE)
+nac_enc17_22 <- readr::read_delim("_output/nac_enc.csv", 
+                           delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult %>% 
+  filter(run %in% unique(c(def_enc17_21$RUN))) %>% 
+  nrow()
+# 180 #298
+
+cnt_runs_mort<-
+  paste0("Usuarios emparejados\n(fallecidos registrados)\n(p= ",
+  formatC(
+    tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult %>% 
+      filter(run %in% unique(c(def_enc17_21$RUN))) %>% 
+      distinct(run) %>% nrow(), format='f', big.mark='.', digits=0),")")
+
+cnt_runs_mort
+#[1] "Usuarios emparejados\n(fallecidos registrados)\n(p= 99)"
+
+paste0("Porcentaje de personas que mueren en los registros de mortalidad: ",
+scales::percent(
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult %>% 
+  filter(run %in% unique(c(def_enc17_21$RUN))) %>% 
+  nrow()/length(unique(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult$run))
+)
+)
+#[1] "Porcentaje de personas que mueren en los registros de mortalidad: 4%" (subió de un 3% al 4)
+
+cat("Ver si los que mueren internamente también lo hacen en la base de hospitalizaciones")
+filter(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult,cond_egr==2) %>% distinct(run) %>% nrow()
+#27
+if(
+tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult %>% 
+  filter(run %in% unique(c(def_enc17_21$RUN))) %>% 
+  filter(cond_egr==2) %>% nrow()==
+filter(tt_dtX2023_12_05_DatosEgresosHosp_encrip_s5_adult,cond_egr==2) %>% distinct(run) %>% nrow()
+){print("Sí")}
+```
+
+<br> 
+
+# Información de la sesión
+
+```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+cat(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
+cat(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
+cat(paste0("Editor context: ", getwd()))
+cat("quarto version: "); system("quarto --version") 
+
+quarto::quarto_version()
+
+save.image("20240405_25.RData")
+```
+
+
+```{r session-info-r, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+#| class-output: center-table
+
+sesion_info <- devtools::session_info()
+dplyr::select(
+  tibble::as_tibble(sesion_info$packages),
+  c(package, loadedversion, source)
+) %>% 
+ knitr::kable(caption = "R packages", format = "html",
+      col.names = c("Row number", "Package", "Version"),
+    row.names = FALSE,
+      align = c("c", "l", "r")) %>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) %>% 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```
+
+
+```{r session-info-python, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+#| class-output: center-table
+
+reticulate::py_list_packages()%>% 
+ knitr::kable(caption = "Python packages", format = "html",
+      col.names = c("Package", "Version", "Requirement"),
+    row.names = FALSE,
+      align = c("c", "l", "r", "r"))%>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) %>% 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```
+
+
+

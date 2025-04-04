@@ -268,34 +268,34 @@ library(DiagrammeR) #⋉style='filled',
 plot_merge_flowchart<-
   grViz("digraph flowchart {
       # node definitions with substituted label text
-      node [fontname = Times, shape = rectangle, fontsize = 9]        
+      node [fontname = Times, shape = rectangle, fontsize = 10]        
       tab1 [label = '@@1']
       blank [label = '', width = 0.0001, height = 0.0001]
-      tab2 [label = '@@2',fontsize = 7]
+      tab2 [label = '@@2',fontsize = 8]
       tab3 [label = '@@3']
-      tab4 [label = '@@9', fontsize= 7]
+      tab4 [label = '@@9', fontsize= 8]
 
       tab5 [label = '@@5']
       blank15 [label = '', width = 0.0001, height = 0.0001]
       tab6 [label = '@@7']
       blank15_jne [label = '', width = 0.0001, height = 0.0001]
-      tab5a [label = '@@10', fontsize= 7]
+      tab5a [label = '@@10', fontsize= 8]
       tab5_jne [label = '@@11']      
-      blank2 [label= '⋉' fontsize = 11, width = 0.0001, height = 0.0001, fillcolor='transparent', color='transparent']
+      blank2 [label= '⋉' fontsize = 12, width = 0.0001, height = 0.0001, fillcolor='transparent', color='transparent']
       tab7 [label = '@@8']
 
       # edge definitions with the node IDs
-      rankdir='TB'; rank= same; tab1 -> blank [arrowhead = none, label='  - Estructuración de la base de datos de hospitalizaciones', fontsize = 7];
+      rankdir='TB'; rank= same; tab1 -> blank [arrowhead = none, label='  - Estructuración de la base de datos de hospitalizaciones', fontsize = 8];
       rankdir='TB'; rank= same; tab1; tab3;   
       blank -> tab2;
                   subgraph {
               rank = same; tab2; blank;
                   }
-      rankdir='TB'; rank= same; blank -> tab3 [label= '  - Recodificar fechas, variables de pertenencia a PPOO (NAs por 0), creación de año de ingreso a tto., \\\\\\l  clasificación códigos CIE-10\\\\\\l', fontsize = 7];   
+      rankdir='TB'; rank= same; blank -> tab3 [label= '  - Recodificar fechas, variables de pertenencia a PPOO (NAs por 0), creación de año de ingreso a tto., \\\\\\l  clasificación códigos CIE-10\\\\\\l', fontsize = 8];   
       
       #paso 2
       rankdir='TB'; rank= same; tab3 -> blank15 [arrowhead = none];
-      rankdir='TB'; rank= same; blank15 ->  tab5 [label= '@@6', fontsize = 7];
+      rankdir='TB'; rank= same; blank15 ->  tab5 [label= '@@6', fontsize = 8];
       blank15 -> tab4;
                   subgraph {
               rank = same; tab4; blank15;

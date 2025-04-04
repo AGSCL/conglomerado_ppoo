@@ -472,7 +472,7 @@ Visualizamos mediante Index plots (ordenados desde el inicio)
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 gc()
 seqIplot(States_Wide.seq_quarter_t_prim_adm, sortv = "from.start",   # Sequence object
@@ -497,7 +497,7 @@ seqIplot(States_Wide.seq_quarter_t_prim_adm, sortv = "from.start",   # Sequence 
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 seqIplot(States_Wide.seq_quarter_t_prim_adm_cens, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
@@ -521,7 +521,7 @@ seqIplot(States_Wide.seq_quarter_t_prim_adm_cens, sortv = "from.start",   # Sequ
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seqIplot(States_Wide.seq_month_t_prim_adm, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
          cex.legend = 0.6,  # Change size of legend
@@ -544,7 +544,7 @@ seqIplot(States_Wide.seq_month_t_prim_adm, sortv = "from.start",   # Sequence ob
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seqIplot(States_Wide.seq_month_t_prim_adm_cens, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
          cex.legend = 0.6,  # Change size of legend
@@ -567,7 +567,7 @@ seqIplot(States_Wide.seq_month_t_prim_adm_cens, sortv = "from.start",   # Sequen
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seqIplot(States_Wide.seq_quarter_t_prim_adm_RM, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
          cex.legend = 0.6,  # Change size of legend
@@ -590,7 +590,8 @@ seqIplot(States_Wide.seq_quarter_t_prim_adm_RM, sortv = "from.start",   # Sequen
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
+
 seqIplot(States_Wide.seq_quarter_t_prim_adm_RM_cens, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
          cex.legend = 0.6,  # Change size of legend
@@ -613,7 +614,7 @@ seqIplot(States_Wide.seq_quarter_t_prim_adm_RM_cens, sortv = "from.start",   # S
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seqIplot(States_Wide.seq_month_t_prim_adm_RM, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
          cex.legend = 0.6,  # Change size of legend
@@ -636,7 +637,7 @@ seqIplot(States_Wide.seq_month_t_prim_adm_RM, sortv = "from.start",   # Sequence
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seqIplot(States_Wide.seq_month_t_prim_adm_RM_cens, sortv = "from.start",   # Sequence object
          with.legend = "right", # Display legend on right side of plot
          cex.legend = 0.6,  # Change size of legend
@@ -666,13 +667,12 @@ cbind.data.frame(marco= "Mensual (s/censura)", data.table::as.data.table(attr(fr
 cbind.data.frame(marco= "Mensual (c/censura)", data.table::as.data.table(attr(freqtab_mes_cens,"freq"), keep.rownames = "Secuencias (estado/frecuencia)"))
 ) |> 
   dplyr::mutate(Percent= scales::percent(Percent/100, accuracy=0.1)) |> 
-  {
-  #copiar_nombres2()
-    write.table(., file = paste0(getwd(),"secuencias_mas_frecuentes_25.csv"), dec=",", sep="\t")
-    knitr::kable(., size=10, format="html", caption="Secuencias más frecuentes") |> 
+  (\(df) {
+    write.table(df, file = paste0(getwd(),"secuencias_mas_frecuentes_25.csv"), dec=",", sep="\t")
+    knitr::kable(df, size=10, format="html", caption="Secuencias más frecuentes") |> 
     kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
     kableExtra::scroll_box(width = "100%", height = "375px")  
-  }
+  })()
 ```
 
 A partir de la tabla anterior, se confirma que más del 50% sólo tienen un evento hospitalario, liderando el por causas psiquiátricas (52%) seguido muy de lejos por un sólo ingreso por consumo de sustancias (8%) y comorbilidad (2%). Luego, un 2% tiene más de un evento psiquiátrico que habría durado más de un trimestre, presumiblemente, debido a su continuidad. Para la base con datos mensuales, un 44% corresponde a un mes en ingreso por causas psiquiátricas, un 7% por causas por consumo de sustancias y un 1% por comorbilidad. También se constata eventos compuestos de 2 meses en consulta psiquiátrica (6%) y hasta 3 (1%).
@@ -690,14 +690,13 @@ cbind.data.frame(marco= "Trimestral (c/censura)", data.table::as.data.table(attr
 cbind.data.frame(marco= "Mensual (s/censura)", data.table::as.data.table(attr(freqtab_mes_reg,"freq"), keep.rownames = "Secuencias (estado/frecuencia)")),
 cbind.data.frame(marco= "Mensual (c/censura)", data.table::as.data.table(attr(freqtab_mes_cens_reg,"freq"), keep.rownames = "Secuencias (estado/frecuencia)"))
 ) |> 
-  dplyr::mutate(Percent= scales::percent(Percent/100, accuracy=0.1)) |> 
-  {
-  #copiar_nombres2()
-    write.table(., file = paste0(getwd(),"secuencias_mas_frecuentes_reg_25.csv"), dec=",", sep="\t")
-    knitr::kable(., size=10, format="html", caption="Secuencias más frecuentes (region)") |> 
+  dplyr::mutate(Percent= scales::percent(Percent/100, accuracy=0.1))|> 
+  (\(df) {
+    write.table(df, file = paste0(getwd(),"secuencias_mas_frecuentes_reg_25.csv"), dec=",", sep="\t")
+    knitr::kable(df, size=10, format="html", caption="Secuencias más frecuentes (región)") |> 
     kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
     kableExtra::scroll_box(width = "100%", height = "375px")  
-  }
+  })()
 ```
 
 Para las secuencias regionales, se observa que una mayor parte de los ingresos corresponde a personas que no tienen su primer y único ingreso en la región metropolitana (34%), seguido por quienes sí lo tienen (28%). Posteriormente, se encuentran los que tienen un evento continuo presumiblemente fuera de la región metropolitana (2%) y en la región metropolitana (2%).
@@ -1141,7 +1140,6 @@ Ahora por mes
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 seq_mean_t(States_Wide.seq_month_t_prim_adm, 
            subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |>
@@ -1181,7 +1179,7 @@ seq_mean_t(States_Wide.seq_month_t_prim_adm,
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 seq_mean_t(States_Wide.seq_month_t_prim_adm_RM, 
            subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, glosa_sexo)) |>
@@ -1222,7 +1220,7 @@ seq_mean_t(States_Wide.seq_month_t_prim_adm_RM,
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seq_mean_t(States_Wide.seq_month_t_prim_adm_cens, 
            subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, glosa_sexo)) |> 
   data.table::as.data.table(keep.rowname=T) |> 
@@ -1262,7 +1260,7 @@ seq_mean_t(States_Wide.seq_month_t_prim_adm_cens,
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seq_mean_t(States_Wide.seq_month_t_prim_adm, 
            subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
   data.table::as.data.table(keep.rowname=T) |> 
@@ -1301,7 +1299,7 @@ seq_mean_t(States_Wide.seq_month_t_prim_adm,
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 seq_mean_t(States_Wide.seq_month_t_prim_adm_RM, 
            subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide4, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
   data.table::as.data.table(keep.rowname=T) |> 
@@ -1340,7 +1338,6 @@ seq_mean_t(States_Wide.seq_month_t_prim_adm_RM,
 #| results: "hold"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 seq_mean_t(States_Wide.seq_month_t_prim_adm_cens, 
            subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide_cens, !run %in% casos_prob, factor_inclusivo_real_hist_mas_autperc)) |> 
@@ -1393,7 +1390,6 @@ La probabilidad de cambiar en un posición de un estado a otro. Por defecto, las
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 trim_tasa_sexo_cnt<-  
 seqcount_t(States_Wide.seq_quarter_t_prim_adm, 
@@ -1441,7 +1437,6 @@ dplyr::left_join(trim_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sex
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 trim_tasa_sexo_cnt_rm<-  
 seqcount_t(States_Wide.seq_quarter_t_prim_adm_RM, 
@@ -1489,7 +1484,6 @@ dplyr::left_join(trim_tasa_sexo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 trim_tasa_sexo_cnt_cens<-  
 seqcount_t(States_Wide.seq_quarter_t_prim_adm_cens, 
@@ -1539,7 +1533,6 @@ dplyr::left_join(trim_tasa_sexo_cnt_cens, by=c("from"="from", "glosa_sexo"="glos
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 trim_tasa_ppoo_cnt<-  
 seqcount_t(States_Wide.seq_quarter_t_prim_adm, 
@@ -1589,7 +1582,6 @@ dplyr::left_join(trim_tasa_ppoo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sex
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 trim_tasa_ppoo_cnt_rm<-  
 seqcount_t(States_Wide.seq_quarter_t_prim_adm_RM, 
@@ -1639,7 +1631,6 @@ dplyr::left_join(trim_tasa_ppoo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 trim_tasa_ppoo_cnt_cens<-  
 seqcount_t(States_Wide.seq_quarter_t_prim_adm_cens, 
@@ -1718,7 +1709,6 @@ trim_tasa_ppoo_rate |>
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
 
 mes_tasa_sexo_cnt<-  
 seqcount_t(States_Wide.seq_month_t_prim_adm, 
@@ -1767,7 +1757,7 @@ dplyr::left_join(mes_tasa_sexo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 mes_tasa_sexo_cnt_rm<-  
 seqcount_t(States_Wide.seq_month_t_prim_adm_RM, 
@@ -1815,7 +1805,7 @@ dplyr::left_join(mes_tasa_sexo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_s
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 mes_tasa_sexo_cnt_cens<-  
 seqcount_t(States_Wide.seq_month_t_prim_adm_cens, 
@@ -1865,7 +1855,7 @@ dplyr::left_join(mes_tasa_sexo_cnt_cens, by=c("from"="from", "glosa_sexo"="glosa
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 mes_tasa_ppoo_cnt<-  
 seqcount_t(States_Wide.seq_month_t_prim_adm, 
@@ -1916,7 +1906,7 @@ dplyr::left_join(mes_tasa_ppoo_cnt, by=c("from"="from", "glosa_sexo"="glosa_sexo
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 mes_tasa_ppoo_cnt_rm<-  
 seqcount_t(States_Wide.seq_month_t_prim_adm_RM, 
@@ -1966,7 +1956,7 @@ dplyr::left_join(mes_tasa_ppoo_cnt_rm, by=c("from"="from", "glosa_sexo"="glosa_s
 #| results: "hide" #para no mostrar las bases
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 mes_tasa_ppoo_cnt_cens<-  
 seqcount_t(States_Wide.seq_month_t_prim_adm_cens, 
@@ -2197,7 +2187,7 @@ Se generan los dendogramas, que para mejor representación se restringe a un mí
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 plot(cut(as.dendrogram(om_dist_quarter), h = 30)$upper, 
      main = NULL, 
@@ -2225,7 +2215,7 @@ plot(cut(as.dendrogram(om_dist_quarter), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 plot(cut(as.dendrogram(om_dist_quarter_rm), h = 30)$upper, 
      main = NULL, 
@@ -2253,7 +2243,7 @@ plot(cut(as.dendrogram(om_dist_quarter_rm), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 plot(cut(as.dendrogram(lcs_dist_quarter), h = 30)$upper, 
      main =NULL, 
      ylab = "Distancia", xlab = "", cex = 0.2)
@@ -2275,7 +2265,7 @@ plot(cut(as.dendrogram(lcs_dist_quarter), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 plot(cut(as.dendrogram(lcs_dist_quarter_rm), h = 30)$upper, 
      main =NULL, 
      ylab = "Distancia", xlab = "", cex = 0.2)
@@ -2296,7 +2286,7 @@ plot(cut(as.dendrogram(lcs_dist_quarter_rm), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 plot(cut(as.dendrogram(om_dist_quarter_cens), h = 30)$upper, 
      main = NULL,
      ylab = "Distancia", xlab = "", cex = 0.2)
@@ -2317,7 +2307,7 @@ plot(cut(as.dendrogram(om_dist_quarter_cens), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 plot(cut(as.dendrogram(lcs_dist_quarter_cens), h = 30)$upper, 
      main = NULL, 
@@ -2348,7 +2338,7 @@ plot(cut(as.dendrogram(lcs_dist_quarter_cens), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 plot(cut(as.dendrogram(om_dist_month), h = 30)$upper, 
      main = NULL,
      ylab = "Distancia", xlab = "", cex = 0.5)
@@ -2370,7 +2360,7 @@ plot(cut(as.dendrogram(om_dist_month), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 plot(cut(as.dendrogram(om_dist_month_rm), h = 30)$upper, 
      main = NULL,
      ylab = "Distancia", xlab = "", cex = 0.5)
@@ -2391,7 +2381,7 @@ plot(cut(as.dendrogram(om_dist_month_rm), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 plot(cut(as.dendrogram(lcs_dist_month), h = 30)$upper, 
      main = NULL,
@@ -2413,7 +2403,7 @@ plot(cut(as.dendrogram(lcs_dist_month), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 plot(cut(as.dendrogram(lcs_dist_month_rm), h = 30)$upper, 
      main = NULL,
@@ -2435,7 +2425,7 @@ plot(cut(as.dendrogram(lcs_dist_month_rm), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 plot(cut(as.dendrogram(om_dist_month_cens), h = 30)$upper, 
      main = NULL,
      ylab = "Distancia", xlab = "", cex = 0.2)
@@ -2456,7 +2446,7 @@ plot(cut(as.dendrogram(om_dist_month_cens), h = 30)$upper,
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 plot(cut(as.dendrogram(lcs_dist_month_cens), h = 30)$upper, 
      main = NULL,
@@ -2535,7 +2525,7 @@ Visualizamos los índices de calidad estandarizados, ya sea en magnitudes brutas
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(om_dist_quarter_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral")
@@ -2564,7 +2554,7 @@ abline(v=9, col="#666666", lty="longdash", lwd = 2)
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(lcs_dist_quarter_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
@@ -2594,7 +2584,7 @@ abline(v=11, col="#666666", lty="longdash", lwd = 2)
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(om_dist_quarter_cens_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (c/ censura)")
@@ -2624,7 +2614,7 @@ abline(v=11, col="#666666", lty="longdash", lwd = 2)
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(lcs_dist_quarter_cens_c, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (c/ censura)")
@@ -2650,7 +2640,7 @@ La solución de 2 cluster es la de mejor calidad.
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(om_dist_quarter_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "OM Trimestral")
@@ -2679,7 +2669,7 @@ abline(v=5, col="#666666", lty="longdash", lwd = 2)
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(lcs_dist_quarter_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
@@ -2768,7 +2758,7 @@ plot(lcs_dist_month_cens_c, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", yl
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(om_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "OM Trimestral")
@@ -2797,7 +2787,7 @@ plot(om_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab 
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(lcs_dist_month_c_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
@@ -2873,7 +2863,7 @@ Visualizamos los índices de ajuste brutos y estandarizados (std).
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_quarter_om, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "right", main = "OM Trimestral")
@@ -2902,7 +2892,7 @@ plot(pamRange_quarter_om, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_quarter_lcs, stat = c("ASW","HC", "HG", "PBC"), xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral")
@@ -2931,7 +2921,7 @@ plot(pamRange_quarter_lcs, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", yla
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 par(mfrow =c(1,2)) 
 plot(pamRange_quarter_om_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Trimestral (c/ censura)")
  abline(v=7, col="#666666", lty="longdash", lwd = 2)
@@ -2957,7 +2947,7 @@ plot(pamRange_quarter_om_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore",
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_quarter_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Trimestral (c/ censura)")
@@ -2986,7 +2976,7 @@ abline(v=6, col="#666666", lty="longdash", lwd = 2)
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_quarter_om_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "right", main = "OM Trimestral")
@@ -3015,7 +3005,7 @@ plot(pamRange_quarter_om_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", y
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_quarter_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "bottomright", main = "LCS Trimestral")
@@ -3042,7 +3032,7 @@ plot(pamRange_quarter_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", 
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 par(mfrow =c(1,2)) 
 plot(pamRange_month_om, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual")
 # abline(v=2, col="#666666", lty="longdash", lwd = 2)
@@ -3070,7 +3060,7 @@ plot(pamRange_month_om, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab =
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 par(mfrow =c(1,2)) 
 plot(pamRange_month_lcs, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual")
 # abline(v=2, col="#666666", lty="longdash", lwd = 2)
@@ -3098,7 +3088,7 @@ plot(pamRange_month_lcs, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", ylab 
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_month_om_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual (c/ censura)")
@@ -3127,7 +3117,7 @@ plot(pamRange_month_om_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", y
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 
 par(mfrow =c(1,2)) 
 plot(pamRange_month_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual (c/ censura)")
@@ -3156,7 +3146,7 @@ plot(pamRange_month_lcs_cens, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", 
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 par(mfrow =c(1,2)) 
 plot(pamRange_month_om_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "OM Mensual")
  abline(v=2, col="#666666", lty="longdash", lwd = 2)
@@ -3183,7 +3173,7 @@ plot(pamRange_month_om_rm, stat = c("ASW","HC", "HG", "PBC"), norm="zscore", yla
 #| results: "hide"
 #| fig-width: 8
 #| fig-height: 6
-#| column: page
+
 par(mfrow =c(1,2)) 
 plot(pamRange_month_lcs_rm, stat = c("ASW","HC", "HG", "PBC"), ylab = "puntajes", xlab= "N° de cluster", lwd = 2, cex=2, col = c('#729ea1', '#b08b52', '#d9ce98', '#a1b5d8'), legendpos = "topright", main = "LCS Mensual")
 abline(v=4, col="#666666", lty="longdash", lwd = 2)

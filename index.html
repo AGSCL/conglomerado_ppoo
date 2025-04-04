@@ -2412,7 +2412,8 @@ distill-header .nav a {
 <li><p><a href="un_inv_ii_post_ib_SM_25.html">Selección del subconjunto a trabajar</a></p></li>
 <li><p><a href="un_inv_ii2_25.html">Creación de las variables de interés y estructuración de la base de datos de trayectorias</a></p></li>
 <li><p><a href="un_inv_ii3_25.html">Selección de soluciones de conglomerados</a></p></li>
-<li><p><a href="un_inv_ii4_25.R">Prueba de permutaciones estabilidad criterios de calidad solcuiones de conglomerados(sintaxis)</a></p></li>
+<li><p><a href="un_inv_ii4_25.R">Prueba de permutaciones estabilidad criterios de calidad solcuiones de conglomerados (sintaxis)</a></p></li>
+<li><p><a href="un_inv_ii5_pre_25.html">Perparación BDs para caracterización de conglomerados</a></p></li>
 <li><p><a href="un_inv_ii5_25.html">Caracterización de conglomerados</a></p></li>
 <li><p><a href="un_inv_ii6_25.html">Caracterización de conglomerados (sensibilidad trimestral)</a></p></li>
 <li><p><a href="un_inv_ii7_25.html">Caracterización de conglomerados (sensibilidad mensual)</a></p></li>
@@ -2439,56 +2440,56 @@ distill-header .nav a {
     - &quot;F12|T407&quot; = mar 
     - &quot;F10|T510&quot; = oh 
     - &quot;F0[0-9]|F2[0-9]|F3[0-9]|F4[0-9]|F5[0-9]|F6[0-9]|F7[0-9]|F8[0-9]|F9[0-8]&quot; = psy
-  - Genera columnas que suman para cada evento hospitalario la presencia de cada clasificaciÃ³n en las _rec3:
+  - Genera columnas que suman para cada evento hospitalario la presencia de cada clasificación en las _rec3:
     - sum_tus (suma de sustancias)
-    - sum_coc (suma sÃ³lo de cÃ³digos coc)
-    - sum_mar (cÃ³digos mar)
-    - sum_oh (cÃ³digos oh)
-    - sum_tus_psy (cÃ³digos o relacionados con sustancias o psy, inclusive)
-  - Genera columnas para sumar por cada evento hospitalario la presencia de clasificaciÃ³n CONADI:
+    - sum_coc (suma sólo de códigos coc)
+    - sum_mar (códigos mar)
+    - sum_oh (códigos oh)
+    - sum_tus_psy (códigos o relacionados con sustancias o psy, inclusive)
+  - Genera columnas para sumar por cada evento hospitalario la presencia de clasificación CONADI:
     - sum_conadi (presencia de 1&#39;s en columnas CONADI, ya sea cya o ci)
-    - ppo_conadi (binaria, si hay mÃ¡s de 0, hay al menos una clasificaciÃ³n por CONADI)
+    - ppo_conadi (binaria, si hay más de 0, hay al menos una clasificación por CONADI)
   - Genera columna alfabet = coc, mar, oh, cp, psu, cp_psu, psy
   - Exporta a 20231205_hosp_mod20240404.parquet.gzip
   - Total de observaciones = 20,915,274.
 
 - <b>un_inv_II\002_casos_ppoo_minsal_rsh_al_menos.py</b>= A partir de asignaturas/10_Egresos Hospitalarios/20231205_hosp.parquet.gzip
-  - Agrupa por RUN a quienes tienen un 1 en la recodificaciÃ³n binaria &quot;pueblo_originario_01&quot; (quienes se autoidentificaron alguna vez en la BD como perteneciente a PPOO en registros MINSAL) o &quot;RSH&quot; (para quienes se autoidentificaron en el Registro Social de Hogares)
+  - Agrupa por RUN a quienes tienen un 1 en la recodificación binaria &quot;pueblo_originario_01&quot; (quienes se autoidentificaron alguna vez en la BD como perteneciente a PPOO en registros MINSAL) o &quot;RSH&quot; (para quienes se autoidentificaron en el Registro Social de Hogares)
   - Filtra los RUNs que tengan valores mayores a 0 en alguna de estos campos
   - Exporta a filtered_df.csv.gz, que permite generar inclusivo_real_historico posteriormente
 
 - <b>un_inv_ii_post_ib_SM.R</b> = Utiliza 20231205_hosp_mod20240404.parquet.gzip
-  - Se diagnosticÃ³ el problema con el cÃ³digo de establecimiento
-  - Se analizan las fechas, se genera la variable aÃ±o de ingreso
-  - Se filtran eventos hospitalarios con dÃ­as de ingreso negativos 
-  - Se descartan tiempos de estadÃ­a &gt;1827 dÃ­as
-  - Se recodifican caracteres vacÃ­os (ej., &quot;None&quot;) en diagnÃ³sticos CIE-10
-  - Se descartan RUNs errÃ³neos
+  - Se diagnosticó el problema con el código de establecimiento
+  - Se analizan las fechas, se genera la variable año de ingreso
+  - Se filtran eventos hospitalarios con días de ingreso negativos 
+  - Se descartan tiempos de estadía &gt;1827 días
+  - Se recodifican caracteres vacíos (ej., &quot;None&quot;) en diagnósticos CIE-10
+  - Se descartan RUNs erróneos
   - Se descartan pacientes con nacionalidades distintas a Chile
   - Se utiliza filtered_df.csv.gz para generar inclusivo_real_historico, que agrupa a tod@s los que se autoidentifican RSH o MINSAL desde 2010 y CONADI.
-  - UniÃ³n preliminar con base de mortalidad (_output/def_enc.csv) y nacimientos (_output/nac_enc.csv)
+  - Unión preliminar con base de mortalidad (_output/def_enc.csv) y nacimientos (_output/nac_enc.csv)
   - Genera 20240405.RData
 
 - <b>un_inv_ii2.R</b> = Utiliza 20240405.RData
-  - Primera actualizaciÃ³n (2024-05-10): FiltrÃ³ personas sin historial previo de SM/SUD antes de 2017 pero con eventos en 2018 antes de su primera hospitalizaciÃ³n en el rango 15-29 aÃ±os.
-  - Segunda actualizaciÃ³n (2024-05-11): EliminÃ³ hospitalizaciones duplicadas considerando mÃºltiples variables clave.
-  - ExploraciÃ³n CÃ³digos de autolesiones (codigos_z_filtered_df.csv.gz, proveniente de un_inv_II/003_casos_con_codigos_z.py)
-  - Se utiliza el archivo de Hospitalizaciones corregido por MINSAL (&quot;_data/EH_2010_2022_Pasantes_v2_encrip.csv&quot;) para unir con el original (de Diciembre 2013) y obtener el cÃ³digo de establecimiento corregido.
-  - ClasificaciÃ³n de PrevisiÃ³n
-  - ImputaciÃ³n valores PrevisiÃ³n y Tramo (diagrama proceso en &quot;_figs/diagram_imputacion_prev_isapre.bpmn&quot;)
-  - Intento de clasificaciÃ³n de especialidades
-  - Descartados casos en episodios hospitalarios de ingresos de mayores de 18 aÃ±os en neonatologÃ­a
-  - ExploraciÃ³n diagramas de movilidad
-  - Ejercicios fallidos de clasificaciÃ³n un_inv_II/006_trees_para_where.py
-  - ExploraciÃ³n conglomerados de establecimientos
-  - **ESTRUCTURACIÃ“N BASE FORMATO SSA**
+  - Primera actualización (2024-05-10): Filtró personas sin historial previo de SM/SUD antes de 2017 pero con eventos en 2018 antes de su primera hospitalización en el rango 15-29 años.
+  - Segunda actualización (2024-05-11): Eliminó hospitalizaciones duplicadas considerando múltiples variables clave.
+  - Exploración Códigos de autolesiones (codigos_z_filtered_df.csv.gz, proveniente de un_inv_II/003_casos_con_codigos_z.py)
+  - Se utiliza el archivo de Hospitalizaciones corregido por MINSAL (&quot;_data/EH_2010_2022_Pasantes_v2_encrip.csv&quot;) para unir con el original (de Diciembre 2013) y obtener el código de establecimiento corregido.
+  - Clasificación de Previsión
+  - Imputación valores Previsión y Tramo (diagrama proceso en &quot;_figs/diagram_imputacion_prev_isapre.bpmn&quot;)
+  - Intento de clasificación de especialidades
+  - Descartados casos en episodios hospitalarios de ingresos de mayores de 18 años en neonatología
+  - Exploración diagramas de movilidad
+  - Ejercicios fallidos de clasificación un_inv_II/006_trees_para_where.py
+  - Exploración conglomerados de establecimientos
+  - **ESTRUCTURACIÓN BASE FORMATO SSA**
     - Formato wide, hacer bases de datos de grillas por mes y trimestrales
-    - Poblar dichas bases de datos con informaciÃ³n de la base original (df_filled) en funciÃ³n de fechas de ingreso y egreso y alfabeto
-    - Se aÃ±ade defunciones
+    - Poblar dichas bases de datos con información de la base original (df_filled) en función de fechas de ingreso y egreso y alfabeto
+    - Se añade defunciones
   - Genera 20240902.RData
 
 
-- Los .qmd, .HTML y bases de datos .RData que terminan en _25 responoden a la correcciÃ³n aplicada incorporando RUNs que no fueron necesariamente la primera observaciÃ³n el 2018 pero tenÃ­an de todas formas entre 15 y 29 aÃ±os (saquÃ© el group by slice (1) ungroup), lo cual era correcto, ademÃ¡s de incorporar aquellos con mortalidad intrahospitalaria (tambiÃ©n correcto). Eso ayudÃ³ a ganar como 500 mÃ¡s personas.
+- Los .qmd, .HTML y bases de datos .RData que terminan en _25 responoden a la corrección aplicada incorporando RUNs que no fueron necesariamente la primera observación el 2018 pero tenían de todas formas entre 15 y 29 años (saqué el group by slice (1) ungroup), lo cual era correcto, además de incorporar aquellos con mortalidad intrahospitalaria (también correcto). Eso ayudó a ganar como 500 más personas.
 
 (*) Para subir archivos a Saturn Cloud, debo comprimir en .rar por partes de 300MB cada una, subirlas y en Saturn Cloud, y ejecutar en terminal:
     # Install unrar using conda (no admin needed)
@@ -2504,7 +2505,12 @@ distill-header .nav a {
   
     # Remove rars
     rm ~/workspace/*.part*.rar
-    ACTUALIZACION= SÃ³lo necesito subir los archivos .rds alojados en _perm en Ubuntu 
+    ACTUALIZACION= Sólo necesito subir los archivos .rds alojados en _perm en Ubuntu
+
+2025-03-22
+- error: could not delete reference refs/remotes/origin/desktop.ini: cannot lock ref &#39;refs/remotes/origin/desktop.ini&#39;: unable to resolve reference &#39;refs/remotes/origin/desktop.ini&#39;: reference broken. From github.com:AGSCL/conglomerado_ppoo
+ - [deleted]         (none)     -&gt; origin/desktop.ini
+fatal: bad object refs/desktop.ini. error: github.com:AGSCL/conglomerado_ppoo.git did not send all necessary objects 
 </pre>
 
 </div>
@@ -2513,7 +2519,7 @@ distill-header .nav a {
 </div>
 <div class="layout-chunk" data-layout="l-body">
 <div class="sourceCode">
-<pre class="sourceCode r"><code class="sourceCode r"><span><span class="fu">htmltools</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/htmltools/reference/include.html">includeHTML</a></span><span class="op">(</span><span class="st">&quot;_figs/_diagrama_flujo_post_ib_SM_JNE.html&quot;</span><span class="op">)</span></span></code></pre>
+<pre class="sourceCode r"><code class="sourceCode r"><span><span class="fu">htmltools</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/htmltools/reference/include.html">includeHTML</a></span><span class="op">(</span><span class="st">&quot;_figs/output_flowchart_25.html&quot;</span><span class="op">)</span></span></code></pre>
 </div>
 <!DOCTYPE html>
 <html>
@@ -3733,10 +3739,10 @@ color: #333333;
 </head>
 <body style="background-color: white;">
 <div id="htmlwidget_container">
-  <div id="htmlwidget-652c77d2f9d258948d1f" style="width:800px;height:900px;" class="grViz html-widget"></div>
+  <div id="htmlwidget-d60f55666ac7c7b36758" style="width:800px;height:900px;" class="grViz html-widget"></div>
 </div>
-<script type="application/json" data-for="htmlwidget-652c77d2f9d258948d1f">{"x":{"diagram":"digraph flowchart {\n      # node definitions with substituted label text\n      node [fontname = Times, shape = rectangle, fontsize = 9]        \n      tab1 [label = \"Base de datos original\n(n= 20.957.004;\np= 9.646.325)\"]\n      blank [label = \"\", width = 0.0001, height = 0.0001]\n      tab2 [label = \"&#8226;Episodios con tiempos de hospitalización negativos (n= 1.835)\\l&#8226;Episodios con hospitalizaciones aberrantemente largas (>5 años) (n= 1.001)\\l&#8226;Episodios con fechas de ingreso entre 2005 y 2017 (n= 13.245.183)\\l&#8226;Usuarios con diagnósticos rel. a salud mental o TUS entre el 2005 y 2017 (p= 167.237)\\l&#8226;RUNs erróneos (1bad6b8cf97131fceab8543e81f7757195fbb1d36b376ee994ad1cf17699c464) (n= 55.730)\\l&#8226;Usuarios con registros sin nacionalidad Chilena (n= 296.820 p= 194.339)\\l\",fontsize = 7]\n      tab3 [label = \"Base de datos \n(n= 7.356.344;\np= 4.614.409)\"]\n      tab4 [label = \"&#8226;Registros del año 2022 (n=1.068;p= 766)\\l&#8226;Usuarios que al 2018 tenían episodios de salud mental antes de cumplir 15 años (n=102;p= 20)\\l&#8226;Registros duplicados en RUN, cód. establecimiento, área de atención, fecha de ingreso y egreso, previsión,\\ltramo, sexo, edad y 5 primeros diagnósticos (n=2;p= 2)\\l\", fontsize= 7]\n\n      tab5 [label = \"Base de datos final \n(n= 11.853;\np= 6.041)\"]\n      blank15 [label = \"\", width = 0.0001, height = 0.0001]\n      tab6 [label = \"Mortalidad\n(2017-2021)\n(p= 522.360)\"]\n      blank15_jne [label = \"\", width = 0.0001, height = 0.0001]\n      tab5a [label = \"&#8226;Registros en áreas de atención de Neonatología (se sospecha error de clasificación) (n=5; p=5;\\l1 paciente eliminado [sin otros registros])\\l&#8226;Registros descartados producto del reordenamiento de causas (n=2; p=2)\\l\", fontsize= 7]\n      tab5_jne [label = \"Base de datos final\n(p= 6.038)\"]      \n      blank2 [label= \"⋉\" fontsize = 11, width = 0.0001, height = 0.0001, fillcolor=\"transparent\", color=\"transparent\"]\n      tab7 [label = \"Usuarios emparejados\n(fallecidos registrados)\n(p= 70)\"]\n\n      # edge definitions with the node IDs\n      rankdir=\"TB\"; rank= same; tab1 -> blank [arrowhead = none, label=\"  - Estructuración de la base de datos de hospitalizaciones\", fontsize = 7];\n      rankdir=\"TB\"; rank= same; tab1; tab3;   \n      blank -> tab2;\n                  subgraph {\n              rank = same; tab2; blank;\n                  }\n      rankdir=\"TB\"; rank= same; blank -> tab3 [label= \"  - Recodificar fechas, variables de pertenencia a PPOO (NAs por 0), creación de año de ingreso a tto., \\\\\\l  clasificación códigos CIE-10\\\\\\l\", fontsize = 7];   \n      \n      #paso 2\n      rankdir=\"TB\"; rank= same; tab3 -> blank15 [arrowhead = none];\n      rankdir=\"TB\"; rank= same; blank15 ->  tab5 [label= \"  - Usuarios que ingresaron en 2018 con 15 a 29 años con diagnósticos rel. a salud mental o TUS sin registros de hosp.\\l  previas por dichas causas\\l  - Usuarios pertenecientes a PPOO por CONADI (p= 505)\\l  - Usuarios que se han identificado al menos una vez desde el 2005 como pertenecientes a PPOO o reconocidos por\\l CONADI (p= 1.180)\\l\", fontsize = 7];\n      blank15 -> tab4;\n                  subgraph {\n              rank = same; tab4; blank15;\n                  }   \n      #paso 3: post-JNE\n      rankdir=\"TB\"; rank= same; tab5 -> blank15_jne [arrowhead = none];\n      rankdir=\"TB\"; rank= same; blank15_jne -> tab5_jne [arrowhead = none];\n      blank15_jne -> tab5a;      \n                        subgraph {\n              rank = same; tab5a; blank15_jne\n                        }\n      #paso 3 (cierre)\n      rankdir=\"TB\"; rank= same; tab5_jne -> blank2 [arrowhead = none];\n      rankdir=\"TB\"; rank= same; blank2 -> tab6 [arrowhead = none];\n                        subgraph {\n              rank = same; tab6; tab5_jne; blank2\n                        }\n      blank2 -> tab7;\n      }","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
-<script type="application/htmlwidget-sizing" data-for="htmlwidget-652c77d2f9d258948d1f">{"viewer":{"width":800,"height":900,"padding":15,"fill":false},"browser":{"width":800,"height":900,"padding":40,"fill":false}}</script>
+<script type="application/json" data-for="htmlwidget-d60f55666ac7c7b36758">{"x":{"diagram":"\ndigraph flowchart {\n      // Global node style\n      node [fontname = Times, shape = rectangle, fontsize = 11]        \n        \n      // Main nodes and spacing nodes\n      tab1 [label = \"Original hospitalizations database\n(n = 20,957,004; p = 9,646,325)\"]\n      blank [label = \"\", width = 0.0001, height = 0.0001]\n      tab2 [label = \"• Episodes with negative hospitalization durations (n= 1,835)\\l• Episodes with hospitalizations >5 years (n= 1,001)\\l• Episodes with admission dates between 2005 and 2017 (n= 13,246,184)\\l• Erroneous/Indeterminate National ID (e.g., 1bad6b8cf97131... ) (n= 168.240\\lpatients= 55,761)\\l• Users with at least one record indicating a nationality other than\\lChilean (n= 296,820 patients= 194,166)\\l\", fontsize = 9]\n      tab3 [label = \"Intermediate Database\n(n= 7,359,506; patients= 4,615,835)\"]\n      tab4 [label = \"• Records admitted in 2022 (n= 1,068)\\l• Users with MH/SUD-related episodes before age 15 as of 2018 (n= 102)\\l\", fontsize = 9]\n\n      tab5 [label = \"Final database (pre-JNE)\n(n= 14,221; patients= 6,673)\"]\n      blank15 [label = \"\", width = 0.0001, height = 0.0001]\n      tab6 [label = \"Mortality (2017–2021)\n(patients = 523,887)\"]\n      blank15_jne [label = \"\", width = 0.0001, height = 0.0001]\n      tab5a [label = \"• Duplicate records in key fields (i.e., RUN, adm. & disch. date) (n= 16)\\l• Neonatology records (suspected misclassification)\\l(n = 5; p = 5; 2 patients removed)\\l\", fontsize = 9]\n      tab5_jne [label = \"Final database (post adjustments)\n(n= 13,230 patients = 6,626)\"]      \n      blank2 [label = \"⋉\", fontsize = 11, width = 0.0001, height = 0.0001, fillcolor = \"transparent\", color = \"transparent\"]\n      tab7 [label = \"Linked Mortality Data\n(patients = 99)\"]\n\n      // Edge definitions (vertical flow with side processes)\n      rankdir = \"TB\";\n      rank = same;\n      tab1 -> blank [arrowhead = none, label = \"  - Structuring the hospitalizations database\", fontsize = 9];\n      \n      rankdir = \"TB\"; rank = same; tab1; tab3;\n      blank -> tab2;\n      subgraph {\n          rank = same; tab2; blank;\n      }\n      rankdir = \"TB\"; rank = same; \n          blank -> tab3 [label = \"  - Recoding dates, converting PPOO membership variables (NAs as 0), creating treatment \\\\\\l  admission year,ICD-10 code classification \\\\\\l\", fontsize = 9];   \n      \n      // Step 2: Merge/left join process (side process)\n      rankdir = \"TB\"; rank = same; \n          tab3 -> blank15 [arrowhead = none];\n      rankdir = \"TB\"; rank = same; \n          blank15 -> tab5 [label = \"\", fontsize = 9];\n      blank15 -> tab4;\n      subgraph {\n          rank = same; tab4; blank15;\n      }   \n      \n      // Step 3: Post-JNE processing (side branch)\n      rankdir = \"TB\"; rank = same; \n          tab5 -> blank15_jne [arrowhead = none];\n      rankdir = \"TB\"; rank = same; \n          blank15_jne -> tab5_jne [arrowhead = none];\n          blank15_jne -> tab5a;\n      subgraph {\n          rank = same; tab5a; blank15_jne;\n      }\n      \n      // Step 3 closure: merging post-JNE and mortality linkage\n      rankdir = \"TB\"; rank = same; \n          tab5_jne -> blank2 [arrowhead = none];\n      rankdir = \"TB\"; rank = same; \n          blank2 -> tab6 [arrowhead = none];\n      subgraph {\n          rank = same; tab6; tab5_jne; blank2;\n      }\n      blank2 -> tab7;\n}\n      // Substitution mapping for placeholders:","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+<script type="application/htmlwidget-sizing" data-for="htmlwidget-d60f55666ac7c7b36758">{"viewer":{"width":800,"height":900,"padding":15,"fill":false},"browser":{"width":800,"height":900,"padding":40,"fill":false}}</script>
 </body>
 </html>
 </div>

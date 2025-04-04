@@ -2154,7 +2154,7 @@ if(nrow(dt_ing_calendar_quarter_t_desde_primera_adm_dedup)> length(unique(dt_ing
               length(unique(dt_ing_calendar_quarter_t_desde_primera_adm$run))*20))  
 }
 
-invisible("Ver si los")
+invisible("Ver si los mortalidades intrahospitalarias generan problemas")
 if(
 dt_ing_calendar_quarter_t_desde_primera_adm_dedup |> group_by(run) |> summarise(sum_cond_egr= sum(mort_intrahosp, na.rm=T)) |> filter(sum_cond_egr>1) |> nrow()>0){warning("Más de un fallecimiento por usuario")}
 

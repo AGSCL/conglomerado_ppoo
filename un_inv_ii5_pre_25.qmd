@@ -1,0 +1,2842 @@
+---
+title: "Paso 5 (0)- Trayectorias de hospitalización y mortalidad con foco en condiciones vinculadas a trastornos de salud mental y consumo de sustancias posterior a un primer ingreso por alguno de estos trastornos, en usuarios/as jóvenes y adultos emergentes de población general y pertenecientes a pueblos originarios, 2018-2021, Chile"
+description: |
+  Preparar la base de datos para representar trayectorias de hospitalización. Mostrar las pruebas de permutaciones (R=1000) para la estabilidad de las soluciones de conglomerados en términos de los índices de calidad.
+date-format: "D [d]e MMM, YYYY"
+lang: es
+date: last-modified
+bibliography: [_lit/referencias.bib]
+csl: "_lit/american-medical-association.csl" # (Opcional: estilo de citas, p.ej., APA)
+author: "Andrés González Santa Cruz"
+format: 
+  html:
+    css: [_lib/styles.scss]
+    code-fold: true
+    embed-resources: true
+    fig-cap-location: top
+lightbox: auto
+toc: true
+toc-depth: 5
+toc-location: left
+toc-float: true
+---
+
+<style>
+.scrollable-content {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+<style>
+pre.scrollable-code {
+  max-height: 350px;
+  overflow-y: auto;
+}
+</style>
+
+
+# Configurar
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+
+# remover objetos y memoria utilizada
+rm(list=ls());gc()
+
+#remover imágenes
+while(!dev.cur())dev.off()
+cat("\014")
+
+if(Sys.info()["sysname"]=="Windows"){
+ folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
+                       "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
+                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
+} else {folder_path <- ""}
+load(paste0(folder_path,"20240903_25.RData"))
+```
+
+
+
+# Paquetes estadísticos
+
+```{r setup}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+
+#elegir repositorio
+if(Sys.info()["sysname"]=="Windows"){
+  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+}
+options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
+
+#borrar caché
+#system("fc-cache -f -v")
+
+if(!require(pacman)){install.packages("pacman");require(pacman)}
+
+pacman::p_unlock(lib.loc = .libPaths()) #para no tener problemas reinstalando paquetes
+
+if(Sys.info()["sysname"]=="Windows"){
+if (getRversion() != "4.4.1") { stop("Requiere versión de R 4.4.1. Actual: ", getRversion()) }
+}
+
+cat("quarto version: "); system("quarto --version") 
+
+if(!require(job)){install.packages("job");require(job)}
+if(!require(kableExtra)){install.packages("kableExtra");require(kableExtra)}
+if(!require(tidyverse)){install.packages("tidyverse");require(tidyverse)}
+if(!require(cluster)){install.packages("cluster"); require(cluster)}
+if(!require(WeightedCluster)){install.packages("WeightedCluster"); require(WeightedCluster)}
+if(!require(devtools)){install.packages("devtools"); require(devtools)}
+if(!require(TraMineR)){install.packages("TraMineR"); require(TraMineR)}
+if(!require(TraMineRextras)){install.packages("TraMineRextras"); require(TraMineRextras)}
+if(!require(NbClust)){install.packages("NbClust"); require(NbClust)}
+if(!require(haven)){install.packages("haven"); require(haven)}
+if(!require(ggseqplot)){install.packages("ggseqplot"); require(ggseqplot)}
+if(!require(grid)){install.packages("grid"); require(grid)}
+if(!require(gridExtra)){install.packages("gridExtra"); require(gridExtra)}
+if(!require(Tmisc)){install.packages("Tmisc"); require(Tmisc)}
+if(!require(factoextra)){install.packages("factoextra"); require(factoextra)}
+if(!require(stargazer)){install.packages("stargazer"); require(stargazer)}
+if(!require(gtsummary)){install.packages("gtsummary"); require(gtsummary)}
+if(!require(lmtest)){install.packages("lmtest"); require(lmtest)}
+if(!require(emmeans)){install.packages("emmeans"); require(emmeans)}
+if(!require(fpp2)){install.packages("fpp2"); require(fpp2)}
+if(!require(purrr)){install.packages("purrr"); require(purrr)}
+if(!require(forecast)){install.packages("forecast"); require(forecast)}
+if(!require(magrittr)){install.packages("magrittr"); require(magrittr)}
+if(!require(foreach)){install.packages("foreach"); require(foreach)}
+if(!require(doParallel)){install.packages("doParallel"); require(doParallel)}
+if(!require(progressr)){install.packages("progressr"); require(progressr)}
+if(!require(chisq.posthoc.test)){devtools::install_github("ebbertd/chisq.posthoc.test")}
+if(!require(rstatix)){install.packages("rstatix"); require(rstatix)}
+if(!require(rio)){install.packages("rio"); require(rio)}
+if(!require(cowplot)){install.packages("cowplot"); require(cowplot)}
+if(!require(DiagrammeR)){install.packages("DiagrammeR"); require(DiagrammeR)}
+if(!require(DiagrammeRsvg)){install.packages("DiagrammeRsvg"); require(DiagrammeRsvg)}
+if(!require(rsvg)){install.packages("rsvg"); require(rsvg)}
+if(!require(survminer)){install.packages("survminer"); require(survminer)}
+```
+
+
+```{r functions}
+#| class-output: center-table
+#| message: true
+#| include: true
+#| warning: false
+#| resdults: "hold"
+#| eval: true
+#| error: true
+seq_mean_t_dos_grupos <- function(bd = NULL, group1, group2) {
+  # Agrupar por ambas variables
+  resultados <- by(bd, list(group1, group2), seqmeant)
+  
+  # Obtener todas las combinaciones posibles de los grupos
+  combinaciones <- expand.grid(group1 = unique(group1), group2 = unique(group2), stringsAsFactors = FALSE)
+  
+  # Extraer los resultados y asociarlos con las combinaciones
+  resultados_df <- do.call(rbind, lapply(seq_along(resultados), function(i) {
+    group_name1 <- attr(resultados, "dimnames")[[1]][i]
+    group_name2 <- attr(resultados, "dimnames")[[2]][i]
+    
+    data.frame(factor_inclusivo_1 = group_name1, 
+               factor_inclusivo_2 = group_name2, 
+               Mean = resultados[[i]])
+  }))
+  
+  # Unir los resultados con las combinaciones para rellenar los valores faltantes
+  final_df <- merge(combinaciones, resultados_df, by.x = c("group1", "group2"), 
+                    by.y = c("factor_inclusivo_1", "factor_inclusivo_2"), all.x = TRUE)
+  
+  return(final_df)
+}
+
+multinom_pivot_wider <- function(x) {
+  # check inputs match expectatations
+  # create tibble of results
+  df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col))
+  df$tbl <- 
+    purrr::map(
+      df$outcome_level,
+      function(lvl) {
+        gtsummary::modify_table_body(
+          x, 
+          ~dplyr::filter(.x, .data$groupname_col %in% lvl) |>
+            dplyr::ungroup() |>
+            dplyr::select(-.data$groupname_col)
+        )
+      }
+    )
+  
+  tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**"))
+}
+
+best_subset_multinom <- function(y, x.vars, data) {
+  # y       Nombre de la variable dependiente (cadena de texto)
+  # x.vars  Vector de nombres de predictores (caracter)
+  # data    Dataframe con los datos de entrenamiento
+  
+  # Cargar las librerías necesarias
+  require(dplyr)
+  require(purrr)
+  require(tidyr)
+  require(nnet)
+  require(MASS)
+  
+  # Generar todas las combinaciones posibles de predictores
+  predictors_list <- lapply(1:length(x.vars), function(i) {
+    combn(x.vars, i, simplify = FALSE)
+  }) |> unlist(recursive = FALSE)
+  
+  # Inicializar una lista para almacenar los resultados
+  results <- list()
+  
+  # Iterar sobre cada combinación de predictores
+  for (i in seq_along(predictors_list)) {
+    predictors <- predictors_list[[i]]
+    formula <- as.formula(paste(y, "~", paste(predictors, collapse = "+")))
+    
+    # Ajustar el modelo multinomial
+    model <- tryCatch(
+      nnet::multinom(formula, data = data, trace = FALSE),
+      error = function(e) NULL
+    )
+    
+    # Si el modelo se ajustó correctamente, almacenar los resultados
+    if (!is.null(model)) {
+      # Extraer el AIC del modelo
+      aic <- AIC(model)
+      
+      # Almacenar la información en una lista
+      results[[length(results) + 1]] <- list(
+        predictors = predictors,
+        model = model,
+        AIC = aic
+      )
+    }
+  }
+  
+  # Convertir la lista de resultados en un dataframe
+  results_df <- results |>
+    purrr::map_df(function(res) {
+      data.frame(
+        predictors = paste(res$predictors, collapse = "+"),
+        AIC = res$AIC,
+        stringsAsFactors = FALSE
+      )
+    })
+  
+  # Ordenar los modelos por AIC de menor a mayor
+  results_df <- results_df |> arrange(AIC)
+  
+  return(results_df)
+}
+best_subset_multinom_interactions <- function(y, x.vars, data) {
+  # y       Nombre de la variable dependiente (cadena de texto)
+  # x.vars  Vector de nombres de predictores (caracter)
+  # data    Dataframe con los datos de entrenamiento
+  
+  # Cargar las librerías necesarias
+  require(dplyr)
+  require(purrr)
+  require(tidyr)
+  require(nnet)
+  require(MASS)
+  
+  # Generar todas las combinaciones posibles de predictores (efectos principales)
+  main_effects_list <- lapply(1:length(x.vars), function(i) {
+    combn(x.vars, i, simplify = FALSE)
+  }) |> unlist(recursive = FALSE)
+  
+  # Inicializar una lista para almacenar los resultados
+  results <- list()
+  
+  # Iterar sobre cada combinación de efectos principales
+  for (main_effects in main_effects_list) {
+    
+    # Generar términos de interacción de hasta 3 variables
+    interaction_terms <- list()
+    
+    # Para interacciones de 2 variables
+    if (length(main_effects) >= 2) {
+      interaction_terms_2way <- combn(main_effects, 2, function(x) paste(x, collapse = ":"))
+      interaction_terms <- c(interaction_terms, interaction_terms_2way)
+    }
+    
+    # Para interacciones de 3 variables
+    if (length(main_effects) >= 3) {
+      interaction_terms_3way <- combn(main_effects, 3, function(x) paste(x, collapse = ":"))
+      interaction_terms <- c(interaction_terms, interaction_terms_3way)
+    }
+    
+    # Combinar efectos principales e interacciones
+    all_terms <- c(main_effects, interaction_terms)
+    
+    # Generar todas las combinaciones posibles de términos (incluyendo interacciones)
+    # Solo se incluyen interacciones si sus efectos principales están presentes
+    term_combinations <- list()
+    
+    # Obtener todos los subconjuntos de efectos principales
+    main_effects_subsets <- lapply(1:length(main_effects), function(i) {
+      combn(main_effects, i, simplify = FALSE)
+    }) |> unlist(recursive = FALSE)
+    
+    # Para cada subconjunto de efectos principales
+    for (me in main_effects_subsets) {
+      # Iniciar con los efectos principales
+      terms <- me
+      
+      # Incluir interacciones solo si todos sus efectos principales están incluidos
+      possible_interactions <- interaction_terms[
+        sapply(interaction_terms, function(x) {
+          vars_in_interaction <- unlist(strsplit(x, ":"))
+          all(vars_in_interaction %in% me)
+        })
+      ]
+      
+      # Generar todas las combinaciones de interacciones para incluir
+      interaction_subsets <- list(NULL)
+      if (length(possible_interactions) > 0) {
+        interaction_subsets <- lapply(1:length(possible_interactions), function(i) {
+          combn(possible_interactions, i, simplify = FALSE)
+        }) |> unlist(recursive = FALSE)
+      }
+      
+      # Para cada combinación de interacciones, crear el conjunto completo de términos
+      for (ints in interaction_subsets) {
+        if (is.null(ints)) {
+          full_terms <- terms
+        } else {
+          full_terms <- c(terms, ints)
+        }
+        
+        # Añadir a la lista de combinaciones de términos
+        term_combinations <- append(term_combinations, list(full_terms))
+      }
+    }
+    
+    # Ajustar modelos para cada combinación de términos
+    for (terms in term_combinations) {
+      formula <- as.formula(paste(y, "~", paste(terms, collapse = "+")))
+      
+      # Ajustar el modelo multinomial
+      model <- tryCatch(
+        nnet::multinom(formula, data = data, trace = FALSE),
+        error = function(e) NULL,
+        warning = function(w) NULL
+      )
+      
+      # Si el modelo se ajustó correctamente, almacenar los resultados
+      if (!is.null(model)) {
+        # Extraer el BIC del modelo
+        bic <- BIC(model)
+        
+        # Almacenar la información en la lista de resultados
+        results[[length(results) + 1]] <- list(
+          predictors = paste(terms, collapse = " + "),
+          model = model,
+          BIC = bic
+        )
+      }
+    }
+  }
+  
+  # Convertir la lista de resultados en un dataframe
+  results_df <- results |>
+    purrr::map_df(function(res) {
+      data.frame(
+        predictors = res$predictors,
+        BIC = res$BIC,
+        stringsAsFactors = FALSE
+      )
+    })
+  
+  # Ordenar los modelos por BIC de menor a mayor
+  results_df <- results_df |> arrange(BIC)
+  
+  return(results_df)
+}
+
+best_subset_multinom_interactions_parallel <- function(y, x.vars, data) {
+  # y       Nombre de la variable dependiente (cadena de texto)
+  # x.vars  Vector de nombres de predictores (caracter)
+  # data    Dataframe con los datos de entrenamiento
+  
+  # Cargar las librerías necesarias dentro de la función
+  require(dplyr)
+  require(purrr)
+  require(tidyr)
+  require(nnet)
+  require(MASS)
+  require(foreach)
+  require(doParallel)
+  require(progressr)
+  
+  # Iniciar los gestores de progreso
+  handlers(global = TRUE)
+  handlers("txt")
+  
+  # Generar todas las combinaciones posibles de predictores (efectos principales)
+  main_effects_list <- lapply(1:length(x.vars), function(i) {
+    combn(x.vars, i, simplify = FALSE)
+  }) |> unlist(recursive = FALSE)
+  
+  # Inicializar una lista para almacenar las fórmulas de los modelos
+  formulas_list <- list()
+  
+  # Generar todas las fórmulas posibles con interacciones hasta de 3 variables
+  for (main_effects in main_effects_list) {
+    
+    # Generar términos de interacción de hasta 3 variables
+    interaction_terms <- character(0)  # Aseguramos que es un vector de caracteres
+    
+    # Para interacciones de 2 variables
+    if (length(main_effects) >= 2) {
+      interaction_terms_2way <- combn(main_effects, 2, function(x) paste(x, collapse = ":"), simplify = TRUE)
+      interaction_terms <- c(interaction_terms, interaction_terms_2way)
+    }
+    
+    # Para interacciones de 3 variables
+    if (length(main_effects) >= 3) {
+      interaction_terms_3way <- combn(main_effects, 3, function(x) paste(x, collapse = ":"), simplify = TRUE)
+      interaction_terms <- c(interaction_terms, interaction_terms_3way)
+    }
+    
+    # Generar todas las combinaciones posibles de efectos principales
+    main_effects_subsets <- lapply(1:length(main_effects), function(i) {
+      combn(main_effects, i, simplify = FALSE)
+    }) |> unlist(recursive = FALSE)
+    
+    # Para cada subconjunto de efectos principales
+    for (me in main_effects_subsets) {
+      # Iniciar con los efectos principales
+      terms <- me
+      
+      # Identificar interacciones cuyos efectos principales están en 'me'
+      if (length(interaction_terms) > 0) {
+        possible_interactions <- interaction_terms[
+          vapply(interaction_terms, function(x) {
+            vars_in_interaction <- unlist(strsplit(x, ":"))
+            all(vars_in_interaction %in% me)
+          }, FUN.VALUE = logical(1))
+        ]
+      } else {
+        possible_interactions <- character(0)
+      }
+      
+      # Generar todas las combinaciones posibles de estas interacciones
+      interaction_subsets <- list(character(0))  # Incluir el caso sin interacciones
+      if (length(possible_interactions) > 0) {
+        interaction_combinations <- lapply(1:length(possible_interactions), function(i) {
+          combn(possible_interactions, i, simplify = FALSE)
+        }) |> unlist(recursive = FALSE)
+        interaction_subsets <- c(interaction_subsets, interaction_combinations)
+      }
+      
+      # Para cada combinación de interacciones
+      for (ints in interaction_subsets) {
+        full_terms <- c(terms, ints)
+        
+        # Crear la fórmula del modelo y almacenarla
+        formula_str <- paste(y, "~", paste(full_terms, collapse = "+"))
+        formulas_list <- append(formulas_list, list(formula_str))
+      }
+    }
+  }
+  
+  # Eliminar posibles duplicados de fórmulas
+  formulas_list <- unique(formulas_list)
+  
+  # Total de modelos a ajustar
+  total_models <- length(formulas_list)
+  
+  # Iniciar el progreso
+  p <- progressor(steps = total_models)
+  
+  # Ajustar los modelos en paralelo usando foreach
+  results_list <- foreach(i = 1:total_models, .packages = c("nnet", "MASS"), .combine = 'rbind') %dopar% {
+    formula_str <- formulas_list[[i]]
+    formula <- as.formula(formula_str)
+    
+    # Ajustar el modelo
+    model <- tryCatch(
+      nnet::multinom(formula, data = data, trace = FALSE),
+      error = function(e) NULL,
+      warning = function(w) NULL
+    )
+    
+    # Actualizar el progreso
+    p(sprintf("Ajustando modelo %d de %d", i, total_models))
+    
+    # Si el modelo se ajustó correctamente, almacenar los resultados
+    if (!is.null(model)) {
+      bic <- BIC(model)
+      data.frame(
+        predictors = formula_str,
+        BIC = bic,
+        stringsAsFactors = FALSE
+      )
+    } else {
+      NULL
+    }
+  }
+  
+  # Convertir los resultados a dataframe y ordenar por BIC
+  results_df <- as.data.frame(results_list)
+  results_df <- results_df |> arrange(BIC)
+  
+  return(results_df)
+}
+
+
+num_cores <- parallel::detectCores() - 1
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+#pacman job kableExtra tidyverse cluster WeightedCluster devtools TraMineR TraMineRextras NbClust haven ggseqplot gridExtra Tmisc factoextra reticulate withr rmarkdown quarto
+
+options(knitr.kable.NA = '')
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#
+
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- ifelse(difftime(Sys.time(), now)>(60^2),difftime(Sys.time(), now)/(60^2),difftime(Sys.time(), now)/(60^1))
+      # return a character string to show the time
+      x<-ifelse(difftime(Sys.time(), now)>(60^2),paste("Tiempo que demora esta sección:", round(res,1), "horas"),paste("Tiempo que demora esta sección:", round(res,1), "minutos"))
+      paste('<div class="message">', gsub('##', '\n', x),'</div>', sep = '\n')
+    }
+  }
+}))
+knitr::opts_chunk$set(time_it = TRUE)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+format_cells <- function(df, rows ,cols, value = c("italics", "bold", "strikethrough")){
+  
+  # select the correct markup
+  # one * for italics, two ** for bold
+  map <- setNames(c("*", "**", "~~"), c("italics", "bold", "strikethrough"))
+  markup <- map[value]  
+  
+  for (r in rows){
+    for(c in cols){
+      
+      # Make sure values are not factors
+      df[[c]] <- as.character( df[[c]])
+      
+      # Update formatting
+      df[r, c] <- ifelse(nchar(df[r, c])==0,"",paste0(markup, gsub(" ", "", df[r, c]), markup))
+    }
+  }
+  
+  return(df)
+}
+#To produce line breaks in messages and warnings
+knitr::knit_hooks$set(
+   error = function(x, options) {
+     paste('\n\n<div class="alert alert-danger" style="font-size: small !important;">',
+           gsub('##', '\n', gsub('^##\ Error', '**Error**', x)),
+           '</div>', sep = '\n')
+   },
+   warning = function(x, options) {
+     paste('\n\n<div class="alert alert-warning" style="font-size: small !important;">',
+           gsub('##', '\n', gsub('^##\ Warning:', '**Warning**', x)),
+           '</div>', sep = '\n')
+   },
+   message = function(x, options) {
+     paste('<div class="message" style="font-size: small !important;">',
+           gsub('##', '\n', x),
+           '</div>', sep = '\n')
+   }
+)
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_
+invisible("Function to format CreateTableOne into a database")
+
+as.data.frame.TableOne <- function(x, ...) {capture.output(print(x,showAllLevels = TRUE, varLabels = T,...) -> x)
+  y <- as.data.frame(x)
+  y$characteristic <- dplyr::na_if(rownames(x), "")
+  y <- y |>
+    fill(characteristic, .direction = "down") |>
+    dplyr::select(characteristic, everything())
+  rownames(y) <- NULL
+  y}
+#_#_#_#_#_#_#_#_#_#_#_#_#_
+# Austin, P. C. (2009). The Relative Ability of Different Propensity 
+# Score Methods to Balance Measured Covariates Between 
+# Treated and Untreated Subjects in Observational Studies. Medical 
+# Decision Making. https://doi.org/10.1177/0272989X09341755
+smd_bin <- function(x,y){
+  z <- x*(1-x)
+  t <- y*(1-y)
+  k <- sum(z,t)
+  l <- k/2
+  
+  return((x-y)/sqrt(l))
+  
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+format_table_vec <- function(tbl, digits = 1) {
+  counts <- as.numeric(tbl)
+  percentages <- prop.table(tbl) * 100
+  
+  formatted <- sapply(seq_along(counts), function(i) {
+    p_val <- percentages[i]
+    # Si el porcentaje es prácticamente entero, formatea sin decimales
+    if (abs(p_val - round(p_val)) < .Machine$double.eps^0.5) {
+      p_str <- sprintf("%.0f", p_val)
+    } else {
+      p_str <- sprintf(paste0("%.", digits, "f"), p_val)
+    }
+    paste0(counts[i], " (", p_str, ")")
+  })
+  
+  formatted
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+
+if(.Platform$OS.type == "windows") withAutoprint({
+  memory.size()
+  memory.size(TRUE)
+  memory.limit()
+})
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+func_tab_range_clus<-
+function(range_clus){
+rbind.data.frame(
+  lapply(
+    list(
+      as.vector(rev(sort(table(range_clus$clustering$cluster2)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster3)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster4)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster5)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster6)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster7)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster8)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster9)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster10)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster11)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster12)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster13)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster14)))),
+      as.vector(rev(sort(table(range_clus$clustering$cluster15))))
+    ),
+    function(x) {
+      length_out <- max(sapply(list(
+        as.vector(rev(sort(table(range_clus$clustering$cluster2)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster3)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster4)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster5)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster6)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster7)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster8)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster9)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster10)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster11)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster12)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster13)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster14)))),
+        as.vector(rev(sort(table(range_clus$clustering$cluster15))))
+      ), length))
+      c(x, rep(NA, length_out - length(x)))
+    }
+  )
+)|>
+  t() |> 
+  data.frame()|>
+  `rownames<-`(NULL)
+}
+
+
+frobenius_norm <- function(matrix1, matrix2) {
+    if (!all(dim(matrix1) == dim(matrix2))) {
+        stop("Matrices must have the same dimensions")
+    }
+    
+    # Replace NA values with 0 (or any other desired default)
+    matrix1[is.na(matrix1)] <- 0
+    matrix2[is.na(matrix2)] <- 0
+    
+    # Calculate the residuals
+    residuals <- matrix1 - matrix2
+    
+    # Frobenius norm
+    frobenius <- sqrt(sum(residuals^2))
+    return(frobenius)
+}
+
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+print.seqnullcqi.powder <- function(x, norm = FALSE, quant = 0.95, digits = 2, 
+                                    append = FALSE, ...) {
+        confcqi2 <- function(nullstat, quant, n){
+          alpha <- (1-quant)/2
+          #calpha <- alpha+(alpha-1)/n
+          #print(c(calpha, alpha))
+          #minmax <- quantile(nullstat, c(calpha, 1-calpha))
+          minmax <- quantile(nullstat, c(alpha, 1-alpha))
+          return(minmax)
+        }
+        
+        normstatcqi2 <- function(bcq, stat, norm=TRUE){
+          origstat <- bcq$clustrange$stats[, stat]
+          nullstat <- bcq$stats[[stat]]
+          #normstat <- rbind(nullstat, origstat)
+          if(norm){
+            for(i in seq_along(origstat)){
+              mx <- mean(nullstat[, i])
+              sdx <- sd(nullstat[, i])
+              nullstat[ , i] <- (nullstat[, i]-mx)/sdx
+              origstat[i] <- (origstat[i]-mx)/sdx
+            }
+          }
+          alldatamax <- apply(nullstat, 1, max)#as.vector(xx)
+          sumcqi <- list(origstat=origstat, nullstat=nullstat, alldatamax=alldatamax)
+          return(sumcqi)
+        }
+    cat("Parametric bootstrap cluster analysis validation\n")
+    cat("Sequence analysis null model:", deparse(x$nullmodel), "\n")
+    cat("Number of bootstraps:", x$R, "\n")
+    cat("Clustering method:", ifelse(x$kmedoid, "PAM/K-Medoid", paste0("hclust with ", x$hclust.method)), "\n")
+    cat("Seqdist arguments:", deparse(x$seqdist.args), "\n\n\n")
+    alls <- as.data.frame(x$clustrange$stats)
+    quants <- rep("", ncol(alls))
+    names(quants) <- colnames(alls)
+    for (ss in colnames(alls)) {
+        sumcqi <- normstatcqi2(x, stat = ss, norm = norm)
+        alls[, ss] <- as.character(round(sumcqi$origstat, digits = digits))
+        borne <- as.character(round(confcqi2(sumcqi$alldatamax, quant, x$R), digits = digits))
+        quants[ss] <- paste0("[", borne[1], "; ", borne[2], "]")
+    }
+    results_tibble <- tibble::as_tibble(rbind(alls, rep("", length(quants)), quants))
+    # Print a summary to the console for immediate feedback
+    rownames(results_tibble) <- c(rownames(x$clustrange$stats), "", paste("Null Max-T", quant, "interval"))
+    
+    results_df <- as.data.frame(results_tibble)
+    print(results_tibble, ...)
+    return(list(
+      results_tibble= results_tibble, 
+      results_df= results_df
+      ))
+}
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+##:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+# Función para aplicar la prueba de Fisher a todas las combinaciones de filas usando todas las columnas
+fisher_posthoc_all_cols <- function(contingency_table) {
+  # Obtener combinaciones de filas (pares)
+  row_pairs <- combn(rownames(contingency_table), 2, simplify = FALSE)
+  
+  # Aplicar la prueba de Fisher a cada par de filas usando todas las columnas al mismo tiempo
+  results <- map_dfr(row_pairs, function(pair) {
+    # Crear tabla de 2xN para el par de filas en todas las columnas
+    sub_table <- contingency_table[pair, , drop = FALSE]
+    
+    # Aplicar el test de Fisher
+    test_result <- fisher.test(sub_table, 
+                                 simulate.p.value=T,
+                                 B=1e4)
+    
+    # Devolver los resultados en un data frame
+    tibble(
+      Row1 = pair[1],
+      Row2 = pair[2],
+      p.value = test_result$p.value
+    )
+  })
+  
+  # Ajustar p-valores usando el método de Holm
+  results <- results |>
+    mutate(p.adjusted = p.adjust(p.value, method = "holm"))
+  
+  return(results)
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+save_base_plot_as_grob <- function(plot_expr, res=300,  width = 1600, height= 1200) {
+    # Crea un archivo temporal con extensión .png
+    filename <- tempfile(fileext = ".png")
+    
+    # Guarda el gráfico en alta resolución en el archivo temporal
+    png(filename, width = width, height = height, res = res)
+    replayPlot(plot_expr)  # Reproduce el gráfico grabado
+    dev.off()  # Cierra el dispositivo gráfico
+    
+    # Convierte el archivo PNG en un objeto gráfico (grob)
+    grob <- grid::rasterGrob(png::readPNG(filename), interpolate = TRUE)
+    
+    return(grob)  # Devuelve el grob
+}
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+chisq_cramerv<- function(contingency_table){
+  chisq_test <- chisq.test(contingency_table)
+  cramers_v <- sqrt(chisq_test$statistic / (sum(contingency_table) * (min(dim(contingency_table)) - 1)))
+  
+  list(chisq_statistic= sprintf("%1.2f", chisq_test$statistic), chisq_df= chisq_test$parameter, chisq_p_value = ifelse(chisq_test$p.value<.001, "<0.001", sprintf("%1.4f", chisq_test$p.value)), cramers_v = sprintf("%1.2f", cramers_v))
+}
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#
+oneway_anova_effect_size <- function(values, group) {
+  # Perform one-way ANOVA
+  anova_result <- aov(values ~ group)
+  
+  # Summarize ANOVA results
+  anova_summary <- summary(anova_result)
+  
+  # Extract sums of squares
+  ss_between <- anova_summary[[1]]$"Sum Sq"[1]
+  ss_total <- sum(anova_summary[[1]]$"Sum Sq")
+  
+  # Calculate eta-squared
+  eta_squared <- ss_between / ss_total
+  
+  # Return ANOVA summary and effect size
+  list(
+    anova_summary = anova_summary,
+    eta_squared = eta_squared
+  )
+}
+```
+
+
+# Resultados
+
+## 0.b. Descripción tiempo seguimiento 
+
+Describir censura incluyendo muerte.
+
+```{r 0b1}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time_rec<- ifelse(!is.na(dt_df_filled_quarter_t_desde_primera_adm_expand$death_time)&dt_df_filled_quarter_t_desde_primera_adm_expand$death_time<dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time,
+                     dt_df_filled_quarter_t_desde_primera_adm_expand$death_time,
+                     dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time)
+
+psych::describe(dt_df_filled_quarter_t_desde_primera_adm_expand$cens_time_rec, quant = c(0.25, 0.75))|> 
+  knitr::kable("html", digits=2)
+```
+
+Ahora por mes
+
+```{r 0b2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec<- ifelse(!is.na(dt_df_filled_month_t_desde_primera_adm_expand$death_time)&dt_df_filled_month_t_desde_primera_adm_expand$death_time<dt_df_filled_month_t_desde_primera_adm_expand$cens_time,
+                     dt_df_filled_month_t_desde_primera_adm_expand$death_time,
+                     dt_df_filled_month_t_desde_primera_adm_expand$cens_time)
+
+psych::describe(dt_df_filled_month_t_desde_primera_adm_expand$cens_time_rec, quant = c(0.25, 0.75)) |> 
+  knitr::kable("html", digits=2)
+```
+
+## 0.c. Compilación de todos CQI's
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "scheme_algo_type_etc"
+#| fig.width: 12 # Ancho total del gráfico
+#| fig.height: 9 # Altura total del gráfico
+#| dpi: 500      # Resolución alta
+#| fig.cap: "Diagrama de algoritmos y métodos de agrupamiento utilizados"
+
+graph <-
+  grViz("
+digraph combinatoria {
+  graph [rankdir=LR]  // Configuración vertical
+
+  node [shape = rectangle, style = filled, color = lightblue]
+
+  Inicio [style = invisible]  // Nodo Inicio invisible
+  Inicio -> {\"HAC\" \"PAM\" \"PAM2\"} [style = invisible, arrowhead = none]  // Flechas iniciales invisibles
+
+  \"HAC\" -> {\"HAC-OM\" \"HAC-LCS\"}
+  \"PAM\" -> {\"PAM-OM\" \"PAM-LCS\"}
+
+  \"HAC-OM\" -> {\"HAC-OM-Trimestral\" \"HAC-OM-Mensual\"}
+  \"HAC-LCS\" -> {\"HAC-LCS-Trimestral\" \"HAC-LCS-Mensual\"}
+  \"PAM-OM\" -> {\"PAM-OM-Trimestral\" \"PAM-OM-Mensual\"}
+  \"PAM-LCS\" -> {\"PAM-LCS-Trimestral\" \"PAM-LCS-Mensual\"}
+  
+  \"PAM2\" -> {\"PAM2-OM\" \"PAM2-LCS\"}
+
+  \"PAM2-OM\" -> {\"PAM2-OM-Trimestral\" \"PAM2-OM-Mensual\"}
+  \"PAM2-LCS\" -> {\"PAM2-LCS-Trimestral\" \"PAM2-LCS-Mensual\"}  
+}
+")
+graph
+# Exportar a SVG
+svg_code <- export_svg(graph)
+writeLines(svg_code, "_figs/diagrama_hierarquia.svg")
+svg_code <- export_svg(graph)
+rsvg_png(charToRaw(svg_code), file = "_figs/diagrama_hierarquia.png")
+```
+
+
+
+```{r desc-post-pre}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+cat("Número de ttos.")
+n_ttos <-
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    summarise(n=n()) |> pull(n) |> 
+    psych::describe(quant = c(0.25, 0.75))
+
+cat("Edad mínima al primer ingreso entre 2018-2021")
+edad_min<-
+dt_ing_calendar_quarter_t_desde_primera_adm_dedup |>
+    dplyr::filter(quarter == 0) |>
+    dplyr::inner_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run")], by="run") |>
+    pull(min_edad_anos) |> 
+    psych::describe(quant = c(0.25, 0.75))
+
+cat("Porcentaje de mujeres")
+scales::percent(round(prop.table(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$glosa_sexo)),2)[2])
+
+cat("Días en tratamiento")
+dias_tto<-
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, days_elapsed) |> 
+    pull(days_elapsed) |> 
+    psych::describe(quant = c(0.25, 0.75))
+
+rbind.data.frame(
+  cbind.data.frame(var = "Número de ttos.", n_ttos[,-1]),
+  cbind.data.frame(var = "Edad mínima de ingreso por paciente", edad_min[,-1]),
+  cbind.data.frame(var = "Días en tto.", dias_tto[,-1])
+) |>
+  `rownames<-`(NULL) |> 
+  select(-trimmed, -mad, -range, -se) |> 
+  knitr::kable("markdown", caption="Información sobre seguimiento de pacientes", digits=2)
+```
+
+
+```{r desc-post}
+cat("Diagnósticos")
+diag_todos<-
+    df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    #dplyr::filter(row_number() != 1) |>  # Elimina la primera observación de cada run
+    dplyr::mutate(
+        all_diags = paste(na.omit(c(diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11)), collapse = ", ")
+    ) |>
+    dplyr::summarise(
+        all_diags = first(all_diags),
+        fecha_egreso_rec_fmt = first(fecha_egreso_rec_fmt),
+        estab_homo = first(estab_homo)
+    ) |>
+    dplyr::ungroup() |> 
+    dplyr::pull(all_diags) |>  # Extraer la columna all_diags como vector
+    strsplit(split = ", ") |>  # Separar cada diagnóstico por comas
+    unlist()
+
+diag_todos_first_tr<-
+    df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1) |>  # me quedo con la primera observación de cada run
+    dplyr::mutate(
+        all_diags = paste(na.omit(c(diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11)), collapse = ", ")
+    ) |>
+    dplyr::summarise(
+        all_diags = first(all_diags),
+        fecha_egreso_rec_fmt = first(fecha_egreso_rec_fmt),
+        estab_homo = first(estab_homo)
+    ) |>
+    dplyr::ungroup() |> 
+    dplyr::pull(all_diags) |>  # Extraer la columna all_diags como vector
+    strsplit(split = ", ") |>  # Separar cada diagnóstico por comas
+    unlist()
+arrange(data.frame(table(diag_todos_first_tr)),-Freq) |> 
+    dplyr::filter(grepl("F19",diag_todos_first_tr)) |> pull(Freq) |> sum()
+invisible("315 en el primer tratamiento...")
+
+cat("Total")
+length(diag_todos)
+
+# diag_todos Freq
+# 1       F192  394
+# 2       F191  104
+# 3       F199   90
+# 4       F193   38
+# 5       F195   25
+# 6       F190   21
+# 7       F198   13
+# 8       F197    2
+# 9       F196    1
+
+cat("Número de casos F19 y porcentaje")
+arrange(data.frame(table(diag_todos)),-Freq) |> 
+    dplyr::filter(grepl("F19",diag_todos)) |> pull(Freq) |> sum()
+#688
+scales::percent(796/22910)
+
+head(arrange(data.frame(table(diag_todos)), -Freq) |> dplyr::mutate(perc=scales::percent(Freq/sum(Freq), accuracy=.01)),20) |> 
+  knitr::kable("markdown", caption="Diagnósticos más frecuentes, código CIE-10, detalle y frecuencia")
+# **F329 (n=990 a 1089)** – *Episodio depresivo no especificado.*  
+# Se refiere a un cuadro depresivo cuyos síntomas no cumplen criterios completos para especificar la gravedad o características particulares.
+# **F322 (n=845 a 959)** – *Episodio depresivo grave sin síntomas psicóticos.*  
+# Episodio depresivo intenso que no presenta alucinaciones ni ideas delirantes, pero con afectación significativa del funcionamiento.
+# **F609 (n=770 a 846)** – *Trastorno de la personalidad sin especificar.*  
+# Diagnóstico que incluye rasgos de personalidad patológicos que no se ajustan a categorías específicas conocidas.
+# **F603 (n=550 a 606)** – *Trastorno de la personalidad emocionalmente inestable (tipo límite).*  
+# También llamado “trastorno límite de la personalidad”, caracterizado por inestabilidad emocional, relaciones interpersonales conflictivas y conducta impulsiva.
+# **F432 (n=491 a 548)** – *Trastornos de adaptación.*  
+# Reacciones emocionales y/o conductuales que surgen como respuesta a un cambio o factor estresante identificable, dificultando la adaptación normal.
+# **F209 (n=433 a 449)** – *Esquizofrenia no especificada.*  
+# Forma de esquizofrenia en la que no se pueden determinar subtipos (paranoide, catatónica, etc.) o faltan detalles para clasificarlos.
+# **F192 (n=394 a 432)** – *Síndrome de dependencia por uso de múltiples drogas.*  
+# Dependencia y uso problemático de diversas sustancias psicoactivas, con patrones de consumo repetitivo y dificultades para el control.
+# **F319 (n=369 a 399)** – *Trastorno bipolar no especificado.*  
+# Forma de trastorno bipolar con episodios de alteración del estado de ánimo, donde faltan datos para clasificar un subtipo específico.
+# **Z915 (n=360 a 391)** – *Antecedentes personales de autolesiones.*  
+# Historia previa de conducta autolesiva o intento de suicidio, utilizada para codificar factores influyentes en el estado de salud actual.
+# **F200 (n=292 a 304)** – *Esquizofrenia paranoide.*  
+# Subtipo de esquizofrenia caracterizado principalmente por la presencia de delirios y alucinaciones de tipo paranoide.
+# **F29X (n=232 a 249)** – *Psicosis no orgánica no especificada.*  
+# Trastorno psicótico sin evidencia de causa orgánica, cuyos rasgos no son suficientes para un diagnóstico más preciso.
+# **F323 (n=230 a 258)** – *Episodio depresivo grave con síntomas psicóticos.*  
+# Episodio depresivo intenso que incluye delirios, alucinaciones u otras manifestaciones psicóticas.
+# **F121 (n=200 a 222)** – *Uso perjudicial de cannabis.*  
+# Consumo de cannabis que causa un deterioro en el funcionamiento personal o social, sin llegar al síndrome de dependencia.
+# **F101 (n=187 a 208)** – *Uso perjudicial de alcohol.*  
+# Patrón de consumo de alcohol que provoca daño a la salud física o mental, sin cumplir criterios de dependencia.
+# **F419 (n=176 a 202)** – *Trastorno de ansiedad no especificado.*  
+# Ansiedad significativa y persistente que no se encuadra en categorías específicas (p.ej. fobias, pánico, etc.).
+# **F142 (n=164 a 185)** – *Síndrome de dependencia de cocaína.*  
+# Presencia de dependencia a la cocaína, con anhelo intenso y dificultad para controlar o interrumpir el consumo.
+# **F321 (n=163 a 179)** – *Episodio depresivo moderado.*  
+# Estado depresivo con síntomas clínicamente relevantes, pero de gravedad intermedia entre leve y grave.
+# **F102 (n=157 a 170)** – *Síndrome de dependencia de alcohol.*  
+# Patrón de dependencia caracterizado por la necesidad imperiosa de beber y dificultad para controlar el consumo.
+# **F171 (n=167)** – *Uso perjudicial de tabaco.*  
+# Consumo de tabaco que genera consecuencias físicas o mentales negativas, sin cumplir criterios de dependencia.
+```
+
+
+El algoritmo PAM busca formar clústeres de manera eficiente, pero puede dar resultados poco generalizables si parte de medoides iniciales poco adecuados. Para evitar esto, generamos una solución de medoides utilizando como punto de partida los clústeres obtenidos previamente con un método jerárquico.
+
+Exportamos .RDS para generar las pruebas de permutaciones.
+
+
+```{r exportar-rds-etapa4}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: hide
+#| fig.show: hide
+#| collapse: true
+
+invisible("Created ")
+pamRange_quarter_om2 <- wcKMedRange(dist_quarter_om, kvals=2:15,  initialclust = om_dist_quarter)
+pamRange_quarter_lcs2 <- wcKMedRange(dist_quarter_lcs, kvals=2:15,  initialclust = lcs_dist_quarter)
+
+pamRange_month_om2<- wcKMedRange(dist_month_om, kvals= 2:15, initialclust= lcs_dist_month)
+pamRange_month_lcs2<- wcKMedRange(dist_month_lcs, kvals= 2:15, initialclust= lcs_dist_month)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+saveRDS(df_filled2, "_perm/df_filled2.rds")
+saveRDS(States_Wide.seq_month_t_prim_adm, "_perm/States_Wide.seq_month_t_prim_adm.rds")
+saveRDS(States_Wide.seq_quarter_t_prim_adm, "_perm/States_Wide.seq_quarter_t_prim_adm.rds")
+saveRDS(om_dist_month, "_perm/om_dist_month.rds")
+saveRDS(lcs_dist_month, "_perm/lcs_dist_month.rds")
+saveRDS(om_dist_quarter, "_perm/om_dist_quarter.rds")
+saveRDS(lcs_dist_quarter, "_perm/lcs_dist_quarter.rds")
+saveRDS(om_dist_month_c, "_perm/om_dist_month_c.rds")
+saveRDS(om_dist_quarter_c, "_perm/om_dist_quarter_c.rds")
+saveRDS(lcs_dist_month_c, "_perm/lcs_dist_month_c.rds")
+saveRDS(lcs_dist_quarter_c, "_perm/lcs_dist_quarter_c.rds")
+saveRDS(pamRange_month_om, "_perm/pamRange_month_om.rds")
+saveRDS(pamRange_month_om2, "_perm/pamRange_month_om2.rds")
+saveRDS(pamRange_quarter_om, "_perm/pamRange_quarter_om.rds")
+saveRDS(pamRange_quarter_om2, "_perm/pamRange_quarter_om2.rds")
+saveRDS(pamRange_month_lcs, "_perm/pamRange_month_lcs.rds")
+saveRDS(pamRange_month_lcs2, "_perm/pamRange_month_lcs2.rds")
+saveRDS(pamRange_quarter_lcs, "_perm/pamRange_quarter_lcs.rds")
+saveRDS(pamRange_quarter_lcs2, "_perm/pamRange_quarter_lcs2.rds")
+saveRDS(costmatrix_month, "_perm/costmatrix_month.rds")
+saveRDS(costmatrix_quarter, "_perm/costmatrix_quarter.rds")
+saveRDS(dist_month_om, "_perm/dist_month_om.rds")
+saveRDS(dist_month_lcs, "_perm/dist_month_lcs.rds")
+saveRDS(dist_quarter_om, "_perm/dist_quarter_om.rds")
+saveRDS(dist_quarter_lcs, "_perm/dist_quarter_lcs.rds")
+```
+
+Eliminamos objetos anteriores y conservamos todo lo estrictamente necesario para reducir la carga computacional.
+
+```{r eliminar-objetos}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: hide
+#| fig.show: hide
+#| collapse: true
+
+objetos_conservar <- c(
+  "dt_ing_calendar_quarter_t_desde_primera_adm_dedup",
+  "dt_ing_calendar_month_t_desde_primera_adm_dedup",
+  "ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens",
+  "ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens",
+  "data_long_establecimiento_2024_std",
+  "df_filled2",
+  "States_Wide.seq_quarter_t_prim_adm_RM_cens",
+  "States_Wide.seq_quarter_t_prim_adm_cens",
+  "States_Wide.seq_quarter_t_prim_adm",
+  "States_Wide.seq_month_t_prim_adm_RM_cens",
+  "States_Wide.seq_month_t_prim_adm_cens",
+  "States_Wide.seq_month_t_prim_adm",
+  "om_dist_month",
+  "lcs_dist_month",
+  "om_dist_quarter",
+  "lcs_dist_quarter",
+  "om_dist_month_c",
+  "om_dist_quarter_c",
+  "lcs_dist_month_c",
+  "lcs_dist_quarter_c",
+  "pamRange_month_om",
+  "pamRange_month_om2",
+  "pamRange_quarter_om",
+  "pamRange_quarter_om2",
+  "pamRange_month_lcs",
+  "pamRange_month_lcs2",
+  "pamRange_quarter_lcs",
+  "pamRange_quarter_lcs2",
+  "costmatrix_month",
+  "costmatrix_quarter",
+  "dist_month_om",
+  "dist_month_lcs",
+  "dist_quarter_om",
+  "dist_quarter_lcs", 
+  "as.data.frame.TableOne",
+  "best_subset_multnom",
+  # "best_subset_multnom_interactions",
+  # "best_subset_multinom_interactions_parallel",
+  "chisq_cramerv",
+  "fisher_posthoc_all_cols",
+  "format_cells",
+  "format_table_vec",
+  "frobenius_norm",
+  "func_tab_range_clus",
+  "mutinom_pivot_wider",
+  "oneway_anova_effect_size",
+  "print.seqnullcqi.powder",
+  "save_base_plot_as_grob",
+  "seq_mean_t_dos_grupos",
+  "smd_bin"
+)
+
+
+
+# Eliminar otros objetos
+rm(list = setdiff(ls(), objetos_conservar))
+```
+
+
+#### 0.c.1. Trimestral
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "cqis-quarter-pre"
+#| results: hide
+#| fig.show: hide
+#| collapse: true
+
+perm_trim <- new.env()
+invisible("if some of the files is corrupted")
+perm_trim_alt<-new.env()
+cat("En caso que las variables fueran corruptas producto de problemas computacionales\n")
+load("_perm/prueba.RData", envir= perm_trim_alt)
+
+options(width = 1e4) #para ampliar la vista del capture output
+load("_perm/null_ssa_hc_quarter_om_comb_20250319.Rda", envir = perm_trim)
+hac_om_quarter_null_comb_stats<-perm_trim$om_quarter_null_comb$stats
+hac_om_quarter_null_comb_print<-print.seqnullcqi.powder(perm_trim$om_quarter_null_comb)
+plot(perm_trim$om_quarter_null_comb, "ASW")
+hac_om_quarter_null_comb_plot_asw <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "ASW", type="density")
+hac_om_quarter_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "HC")
+hac_om_quarter_null_comb_plot_hc <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "HC", type="density")
+hac_om_quarter_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "HG")
+hac_om_quarter_null_comb_plot_hg <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "HG", type="density")
+hac_om_quarter_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "PBC")
+hac_om_quarter_null_comb_plot_pbc <- recordPlot()
+plot(perm_trim$om_quarter_null_comb, "PBC", type="density")
+hac_om_quarter_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(om_quarter_null_comb, envir = perm_trim)
+
+load("_perm/null_ssa_hc_quarter_om_seq_20250319.Rda", envir = perm_trim)
+hac_om_quarter_null_seq_stats<-perm_trim$om_quarter_null_seq$stats
+hac_om_quarter_null_seq_print<-print.seqnullcqi.powder(perm_trim$om_quarter_null_seq)
+plot(perm_trim$om_quarter_null_seq, "ASW")
+hac_om_quarter_null_seq_plot_asw <- recordPlot()
+plot(perm_trim$om_quarter_null_seq, "HC")
+hac_om_quarter_null_seq_plot_hc <- recordPlot()
+plot(perm_trim$om_quarter_null_seq, "HG")
+hac_om_quarter_null_seq_plot_hg <- recordPlot()
+plot(perm_trim$om_quarter_null_seq, "PBC")
+hac_om_quarter_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_trim$om_quarter_null_seq, "ASW", type="density")
+hac_om_quarter_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_trim$om_quarter_null_seq, "HC", type="density")
+hac_om_quarter_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_trim$om_quarter_null_seq, "HG", type="density")
+hac_om_quarter_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_trim$om_quarter_null_seq, "PBC", type="density")
+hac_om_quarter_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(om_quarter_null_seq, envir = perm_trim)
+
+load("_perm/null_ssa_hc_quarter_lcs_comb_20250319.Rda", envir = perm_trim)
+hac_lcs_quarter_null_comb_stats<-perm_trim$lcs_quarter_null_comb$stats
+hac_lcs_quarter_null_comb_print<-print.seqnullcqi.powder(perm_trim$lcs_quarter_null_comb)
+plot(perm_trim$lcs_quarter_null_comb, "ASW")
+hac_lcs_quarter_null_comb_plot_asw <- recordPlot()
+plot(perm_trim$lcs_quarter_null_comb, "HC")
+hac_lcs_quarter_null_comb_plot_hc <- recordPlot()
+plot(perm_trim$lcs_quarter_null_comb, "HG")
+hac_lcs_quarter_null_comb_plot_hg <- recordPlot()
+plot(perm_trim$lcs_quarter_null_comb, "PBC")
+hac_lcs_quarter_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_trim$lcs_quarter_null_comb, "ASW", type="density")
+hac_lcs_quarter_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_trim$lcs_quarter_null_comb, "HC", type="density")
+hac_lcs_quarter_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_trim$lcs_quarter_null_comb, "HG", type="density")
+hac_lcs_quarter_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_trim$lcs_quarter_null_comb, "PBC", type="density")
+hac_lcs_quarter_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(lcs_quarter_null_comb, envir = perm_trim)
+
+# tryCatch({
+#   load("_perm/null_ssa_hc_quarter_lcs_seq_20250319.Rda", envir = perm_trim)#CORRUPTO
+# }, error = function(e) {
+#   # Handle the error if loading fails
+#   message(paste("Error loading file:", e$message))
+#   perm_trim$lcs_quarter_null_seq<- perm_trim_alt$pam_om_quarter_null_comb
+# })
+load("_perm/null_ssa_hc_quarter_lcs_seq_20250319.Rda", envir = perm_trim)
+hac_lcs_quarter_null_seq_stats<-perm_trim$lcs_quarter_null_seq$stats
+hac_lcs_quarter_null_seq_print<-print.seqnullcqi.powder(perm_trim$lcs_quarter_null_seq)
+plot(perm_trim$lcs_quarter_null_seq, "ASW")
+hac_lcs_quarter_null_seq_plot_asw <- recordPlot()
+plot(perm_trim$lcs_quarter_null_seq, "HC")
+hac_lcs_quarter_null_seq_plot_hc <- recordPlot()
+plot(perm_trim$lcs_quarter_null_seq, "HG")
+hac_lcs_quarter_null_seq_plot_hg <- recordPlot()
+plot(perm_trim$lcs_quarter_null_seq, "PBC")
+hac_lcs_quarter_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_trim$lcs_quarter_null_seq, "ASW", type="density")
+hac_lcs_quarter_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_trim$lcs_quarter_null_seq, "HC", type="density")
+hac_lcs_quarter_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_trim$lcs_quarter_null_seq, "HG", type="density")
+hac_lcs_quarter_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_trim$lcs_quarter_null_seq, "PBC", type="density")
+hac_lcs_quarter_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(lcs_quarter_null_seq, envir = perm_trim)
+
+invisible("no funciona: nul incrustado en la cadena")
+#https://stackoverflow.com/questions/45489737/getting-embedded-nul-in-string-in-an-rdata-file-is-the-rdata-file-format-po
+
+load("_perm/null_ssa_pam_quarter_om_comb_20250319.Rda", envir = perm_trim) 
+pam_om_quarter_null_comb_stats<-perm_trim$pam_om_quarter_null_comb$stats
+pam_om_quarter_null_comb_print<-print.seqnullcqi.powder(perm_trim$pam_om_quarter_null_comb)
+plot(perm_trim$pam_om_quarter_null_comb, "ASW")
+pam_om_quarter_null_comb_plot_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb, "HC")
+pam_om_quarter_null_comb_plot_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb, "HG")
+pam_om_quarter_null_comb_plot_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb, "PBC")
+pam_om_quarter_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_om_quarter_null_comb, "ASW", type="density")
+pam_om_quarter_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb, "HC", type="density")
+pam_om_quarter_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb, "HG", type="density")
+pam_om_quarter_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb, "PBC", type="density")
+pam_om_quarter_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_quarter_null_comb, envir = perm_trim)
+
+load("_perm/null_ssa_pam_quarter_om_seq_20250319.Rda", envir = perm_trim)
+pam_om_quarter_null_seq_stats<-perm_trim$pam_om_quarter_null_seq$stats
+pam_om_quarter_null_seq_print<-print.seqnullcqi.powder(perm_trim$pam_om_quarter_null_seq)
+plot(perm_trim$pam_om_quarter_null_seq, "ASW")
+pam_om_quarter_null_seq_plot_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq, "HC")
+pam_om_quarter_null_seq_plot_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq, "HG")
+pam_om_quarter_null_seq_plot_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq, "PBC")
+pam_om_quarter_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_om_quarter_null_seq, "ASW", type="density")
+pam_om_quarter_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq, "HC", type="density")
+pam_om_quarter_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq, "HG", type="density")
+pam_om_quarter_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq, "PBC", type="density")
+pam_om_quarter_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_quarter_null_seq, envir = perm_trim)
+
+load("_perm/null_ssa_pam_quarter_lcs_comb_20250319.Rda", envir = perm_trim)
+pam_lcs_quarter_null_comb_stats<-perm_trim$pam_lcs_quarter_null_comb$stats
+pam_lcs_quarter_null_comb_print<-print.seqnullcqi.powder(perm_trim$pam_lcs_quarter_null_comb)
+plot(perm_trim$pam_lcs_quarter_null_comb, "ASW")
+pam_lcs_quarter_null_comb_plot_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb, "HC")
+pam_lcs_quarter_null_comb_plot_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb, "HG")
+pam_lcs_quarter_null_comb_plot_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb, "PBC")
+pam_lcs_quarter_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_lcs_quarter_null_comb, "ASW", type="density")
+pam_lcs_quarter_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb, "HC", type="density")
+pam_lcs_quarter_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb, "HG", type="density")
+pam_lcs_quarter_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb, "PBC", type="density")
+pam_lcs_quarter_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_quarter_null_comb, envir = perm_trim)
+
+
+load("_perm/null_ssa_pam_quarter_lcs_seq_20250319.Rda", envir = perm_trim)
+pam_lcs_quarter_null_seq_stats<-perm_trim$pam_lcs_quarter_null_seq$stats
+pam_lcs_quarter_null_seq_print<-print.seqnullcqi.powder(perm_trim$pam_lcs_quarter_null_seq)
+plot(perm_trim$pam_lcs_quarter_null_seq, "ASW")
+pam_lcs_quarter_null_seq_plot_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq, "HC")
+pam_lcs_quarter_null_seq_plot_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq, "HG")
+pam_lcs_quarter_null_seq_plot_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq, "PBC")
+pam_lcs_quarter_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_lcs_quarter_null_seq, "ASW", type="density")
+pam_lcs_quarter_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq, "HC", type="density")
+pam_lcs_quarter_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq, "HG", type="density")
+pam_lcs_quarter_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq, "PBC", type="density")
+pam_lcs_quarter_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_quarter_null_seq, envir = perm_trim)
+
+tryCatch({
+  load("_perm/null_ssa_pam_quarter_om_comb2_20250319.Rda", envir = perm_trim) #CORRUPTO
+}, error = function(e) {
+  # Handle the error if loading fails
+  message(paste("Error loading file:", e$message))
+  perm_trim$pam_om_quarter_null_comb2<- perm_trim_alt$pam_om_quarter_null_comb2
+})
+pam_om_quarter_null_comb2_stats<-perm_trim$pam_om_quarter_null_comb2$stats
+pam_om_quarter_null_comb2_print<-print.seqnullcqi.powder(perm_trim$pam_om_quarter_null_comb2)
+plot(perm_trim$pam_om_quarter_null_comb2, "ASW")
+pam_om_quarter_null_comb2_plot_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb2, "HC")
+pam_om_quarter_null_comb2_plot_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb2, "HG")
+pam_om_quarter_null_comb2_plot_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb2, "PBC")
+pam_om_quarter_null_comb2_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_om_quarter_null_comb2, "ASW", type="density")
+pam_om_quarter_null_comb2_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb2, "HC", type="density")
+pam_om_quarter_null_comb2_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb2, "HG", type="density")
+pam_om_quarter_null_comb2_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_comb2, "PBC", type="density")
+pam_om_quarter_null_comb2_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_quarter_null_comb2, envir = perm_trim)
+
+load("_perm/null_ssa_pam_quarter_om_seq2_20250319.Rda", envir = perm_trim)
+pam_om_quarter_null_seq2_stats<-perm_trim$pam_om_quarter_null_seq2$stats
+pam_om_quarter_null_seq2_print<-print.seqnullcqi.powder(perm_trim$pam_om_quarter_null_seq2)
+plot(perm_trim$pam_om_quarter_null_seq2, "ASW")
+pam_om_quarter_null_seq2_plot_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq2, "HC")
+pam_om_quarter_null_seq2_plot_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq2, "HG")
+pam_om_quarter_null_seq2_plot_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq2, "PBC")
+pam_om_quarter_null_seq2_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_om_quarter_null_seq2, "ASW", type="density")
+pam_om_quarter_null_seq2_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq2, "HC", type="density")
+pam_om_quarter_null_seq2_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq2, "HG", type="density")
+pam_om_quarter_null_seq2_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_om_quarter_null_seq2, "PBC", type="density")
+pam_om_quarter_null_seq2_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_quarter_null_seq2, envir = perm_trim)
+# load("_perm/null_ssa_pam_quarter_lcs_comb2_2020319.Rda", envir = perm_trim)
+
+load("_perm/null_ssa_pam_quarter_lcs_comb2_20250319.Rda", envir = perm_trim)
+pam_lcs_quarter_null_comb2_stats<-perm_trim$pam_lcs_quarter_null_comb2$stats
+pam_lcs_quarter_null_comb2_print<-print.seqnullcqi.powder(perm_trim$pam_lcs_quarter_null_comb2)
+plot(perm_trim$pam_lcs_quarter_null_comb2, "ASW")
+pam_lcs_quarter_null_comb2_plot_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb2, "HC")
+pam_lcs_quarter_null_comb2_plot_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb2, "HG")
+pam_lcs_quarter_null_comb2_plot_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb2, "PBC")
+pam_lcs_quarter_null_comb2_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_lcs_quarter_null_comb2, "ASW", type="density")
+pam_lcs_quarter_null_comb2_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb2, "HC", type="density")
+pam_lcs_quarter_null_comb2_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb2, "HG", type="density")
+pam_lcs_quarter_null_comb2_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_comb2, "PBC", type="density")
+pam_lcs_quarter_null_comb2_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_quarter_null_comb2, envir = perm_trim)
+
+load("_perm/null_ssa_pam_quarter_lcs_seq2_20250319.Rda", envir = perm_trim)
+pam_lcs_quarter_null_seq2_stats<-perm_trim$pam_lcs_quarter_null_seq2$stats
+pam_lcs_quarter_null_seq2_print<-print.seqnullcqi.powder(perm_trim$pam_lcs_quarter_null_seq2)
+plot(perm_trim$pam_lcs_quarter_null_seq2, "ASW")
+pam_lcs_quarter_null_seq2_plot_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq2, "HC")
+pam_lcs_quarter_null_seq2_plot_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq2, "HG")
+pam_lcs_quarter_null_seq2_plot_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq2, "PBC")
+pam_lcs_quarter_null_seq2_plot_pbc <- recordPlot()
+
+plot(perm_trim$pam_lcs_quarter_null_seq2, "ASW", type="density")
+pam_lcs_quarter_null_seq2_plot_dens_asw <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq2, "HC", type="density")
+pam_lcs_quarter_null_seq2_plot_dens_hc <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq2, "HG", type="density")
+pam_lcs_quarter_null_seq2_plot_dens_hg <- recordPlot()
+plot(perm_trim$pam_lcs_quarter_null_seq2, "PBC", type="density")
+pam_lcs_quarter_null_seq2_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_quarter_null_seq2, envir = perm_trim)
+
+options(width = getOption("width"))
+
+rm(perm_trim)
+rm(perm_trim_alt)
+```
+
+
+<div class="scrollable-content">
+```{r, class="scrollable-code"}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "cqis-quarter"
+
+cqi_quarter<-
+rbind.data.frame(
+cbind.data.frame(algo="hac", type="om", time="quarter", k=2:15, corr=F, om_dist_quarter_c$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="hac", type="lcs", time="quarter", k=2:15, corr=F, lcs_dist_quarter_c$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="om", time="quarter", k=2:15, corr=F, pamRange_quarter_om$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="om", time="quarter", k=2:15, corr=T, pamRange_quarter_om2$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="lcs", time="quarter", k=2:15, corr=F, pamRange_quarter_lcs$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="lcs", time="quarter", k=2:15, corr=T, pamRange_quarter_lcs2$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2)))
+)|> 
+  dplyr::select(algo, type, time, k, corr, PBC, ASW, HC, HG, R2, R2sq)
+# round(summary(silhouette(as.integer(om_dist_quarter_c$clustering$cluster2), as.dist(dist_quarter_om)))$clus.avg.widths,2)[attr(rev(sort(table(om_dist_quarter_c$clustering$cluster2))),"names")]
+
+#functión para generar el gráfico
+tabs_quarter_clus_sol<-
+rbind.data.frame(
+func_tab_range_clus(om_dist_quarter_c),
+func_tab_range_clus(lcs_dist_quarter_c),
+func_tab_range_clus(pamRange_quarter_om),
+func_tab_range_clus(pamRange_quarter_om2),
+func_tab_range_clus(pamRange_quarter_lcs),
+func_tab_range_clus(pamRange_quarter_lcs2)
+)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+##:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+# Inicializamos una lista para almacenar los resultados
+resultados_list <- list()
+# Definimos un rango para los clusters a evaluar
+cluster_range <- 2:15
+# Definimos los métodos y sus variables
+metodos <- list(
+    hac_om = list(data = om_dist_quarter_c, dist = dist_quarter_om),
+    hac_lcs = list(data = lcs_dist_quarter_c, dist = dist_quarter_lcs),
+    pam_om0 = list(data = pamRange_quarter_om, dist = dist_quarter_om),
+    pam_om1 = list(data = pamRange_quarter_om2, dist = dist_quarter_om),
+    pam_lcs0 = list(data = pamRange_quarter_lcs, dist = dist_quarter_lcs),
+    pam_lcs1 = list(data = pamRange_quarter_lcs2, dist = dist_quarter_lcs)
+)
+# Número máximo de clusters para definir las columnas
+max_clusters <- max(cluster_range)
+# Iteramos sobre cada método
+for (metodo in names(metodos)) {
+    # Creamos un data frame temporal para cada método
+    metodo_result <- data.frame()
+    # Iteramos sobre cada cluster en el rango
+    for (cluster in cluster_range) {
+        # Construimos el nombre del cluster dinámicamente
+        cluster_name <- paste0("cluster", cluster)
+        # Intentamos calcular los valores de silhouette
+        silhouette_values <- tryCatch(
+            round(summary(silhouette(as.integer(metodos[[metodo]]$data$clustering[[cluster_name]]), as.dist(metodos[[metodo]]$dist)))$clus.avg.widths[attr(rev(sort(table(metodos[[metodo]]$data$clustering[[cluster_name]]))),"names")], 2),
+            error = function(e) rep(NA, cluster)
+        )
+        # Creamos un vector con las columnas llenando con NA si faltan valores
+        silhouette_full <- c(silhouette_values, rep(NA, max_clusters - length(silhouette_values)))
+        # Creamos un data frame temporal con los resultados para este cluster
+        cluster_result <- data.frame(
+            Metodo = metodo,
+            Cluster = cluster,
+            t(silhouette_full) # Transponemos los valores para que cada uno sea una columna
+        )
+        # Nombramos dinámicamente las columnas de silhouette
+        colnames(cluster_result)[3:(3 + max_clusters - 1)] <- paste0("asw", 1:max_clusters)
+        # Añadimos el resultado del cluster al data frame del método
+        metodo_result <- rbind(metodo_result, cluster_result)
+    }
+    # Agregamos los resultados del método a la lista general
+    resultados_list[[metodo]] <- metodo_result
+}
+# Combinamos todos los resultados en un único data frame
+avs_por_cluster_quarter <- do.call(rbind, resultados_list)
+# Ordenamos por Método y Cluster
+avs_por_cluster_quarter <- avs_por_cluster_quarter[order(avs_por_cluster_quarter$Metodo, avs_por_cluster_quarter$Cluster), ]
+
+bind_cols(cqi_quarter, tabs_quarter_clus_sol)|>
+  dplyr::mutate(corr= dplyr::case_when(corr==TRUE & algo!="hac"~"1",corr==FALSE & algo!="hac"~"0",T~""), key= paste0(algo,"_",type,corr,"_",k))|> 
+  left_join(dplyr::mutate(avs_por_cluster_quarter, key=paste0(Metodo,"_",Cluster)), by="key") |> 
+  dplyr::select(-Metodo, -Cluster) |> 
+            `rownames<-`(NULL) |>
+  dplyr::mutate(calc= round(PBC*(1/HC)*HG,2)) |> 
+  dplyr::arrange(desc(ASW)) |>
+  dplyr::select(c("algo", "type", "time", "k", "corr", "PBC", "ASW", "HC", "HG", "R2", "R2sq", "calc", paste0("X",1:15), paste0("asw",1:15))) |> 
+  (\(df) {
+    assign("asw_quarter_qci", dplyr::select(df, -"time"), envir = .GlobalEnv)
+    rio::export(df, "_output/sol_conglomerados_tab_quarter_25.xlsx")            
+    knitr::kable(df, "markdown", caption = "CQIs y frecuencias en conglomerados (trimestre)")
+  })()
+```
+</div>
+
+Para validar la robustez de esta tipología, se implementó un procedimiento de bootstrap paramétrico con 1000 réplicas, comparando la calidad de la solución observada con la obtenida al aplicar el mismo procedimiento de clustering a datos generados bajo un modelo nulo combinado. Este modelo nulo evalúa la calidad de la agrupación en ausencia de estructura real, considerando aspectos combinados de duración y secuencia (`comb`), así como la secuencia por sí sola (`seq`), según la metodología propuesta por Studer (2021). Se busca medir cuánta calidad obtenida por la tipología sobrepasa la que habría sido obtenida para datos sin una estructura de conglomerados. El criterio `Max T` obtiene los máximos puntajes para las trayectorias que asumen estructuras aleatorias sobre las que comparar la solución de conglomerados obtenida.@studer_validating_2021 
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "preparacion-siluetas-trim"
+
+categories_pam_om4_q<-attr(States_Wide.seq_quarter_t_prim_adm_cens, "labels")
+new_labels <- categories_pam_om4_q
+new_labels[which(categories_pam_om4_q == "Otras causas")] <- "Otras\ncausas"
+#new_labels[which(categories == "Consumo\nde sustancias")] <- "Consumo de\nsustancias"
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("(==============================================================)\n")
+cat("Hacemos clasificación de pertenencia cluster a las soluciones candidatas y añadimos etiquetas\n")
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4 <-
+  factor(pamRange_quarter_om$clustering$cluster4,levels=rev(attr( sort(table(pamRange_quarter_om$clustering$cluster4)), "name")),
+         labels= c("6623, Un trimestre, TSM(4)", "6612, Un trimestre, TUS(3)", "6522, Un semestre TSM(1)", "6574, Comorbilidad un trimestre(2)"))
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4_2 <-
+  factor(pamRange_quarter_om2$clustering$cluster4,levels=rev(attr( sort(table(pamRange_quarter_om2$clustering$cluster4)), "name")),
+         labels= c("1, Un trimestre, TSM(1)", "15, Un trimestre, TUS(2)", "32, Un semestre TSM(4)", "49, Comorbilidad un trimestre(3)"))
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om6 <-
+  #pamRange_quarter_om$clustering$cluster6
+  factor(pamRange_quarter_om$clustering$cluster6,levels=rev(attr( sort(table(pamRange_quarter_om$clustering$cluster6)), "name")),
+         labels= c("6623, Un trimestre, TSM(5)", 
+                   "6612, Un trimestre, TUS(4)", 
+                   "6522, Un semestre TSM(2)", 
+                   "6624, TSM, 1 año después, otras causas(6)",
+                   "6574, Comorbilidad un trimestre(3)", 
+                   "6268, TSM, 1 año después, TSM(1)"
+         ))
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2_2 <-
+  factor(pamRange_quarter_om2$clustering$cluster2,levels=rev(attr( sort(table(pamRange_quarter_om2$clustering$cluster2)), "name")), labels= c("1, Un trimestre, TSM(1)", "15, Un trimestre, TUS(2)"))
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om3 <-
+  factor(pamRange_quarter_om$clustering$cluster3,levels=rev(attr( sort(table(pamRange_quarter_om$clustering$cluster3)), "name")), labels= c("6623, Un trimestre, TSM(3)", "6612, Un trimestre, TUS(2)", "6522, Un semestre TSM(1)"))
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2 <-
+  factor(pamRange_quarter_om$clustering$cluster2,levels=rev(attr( sort(table(pamRange_quarter_om$clustering$cluster2)), "name")), labels= c("6623, Un trimestre, TSM(2)", "6612, Un trimestre, TUS(1)"))
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_hc_om2 <-
+  factor(om_dist_quarter_c$clustering$cluster2,levels=rev(attr( sort(table(om_dist_quarter_c$clustering$cluster2)), "name")), labels= c("1, Un trimestre, TSM(1)", "2, Un trimestre, TUS(2)"))
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("(==============================================================)\n")
+cat("Creamos valores ASW para las soluciones candidatas\n")
+# Creamos un vector con las columnas llenando con NA si faltan valores
+# 
+sil_pam_om_clus6_q <- wcSilhouetteObs(as.dist(dist_quarter_om), 
+        pamRange_quarter_om$clustering$cluster6, measure="ASW")
+
+sil_pam_om_clus4_q <- wcSilhouetteObs(as.dist(dist_quarter_om), 
+        pamRange_quarter_om$clustering$cluster4, measure="ASW")
+
+sil_pam_om_clus3_q <- wcSilhouetteObs(as.dist(dist_quarter_om), 
+        pamRange_quarter_om$clustering$cluster3, measure="ASW")
+
+sil_pam_om_clus2_q <- wcSilhouetteObs(as.dist(dist_quarter_om), 
+        pamRange_quarter_om$clustering$cluster2, measure="ASW")
+
+sil_hc_om_clus2_q <- wcSilhouetteObs(as.dist(dist_quarter_om), 
+        om_dist_quarter_c$clustering$cluster4, measure="ASW")
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#
+```
+
+
+::: {.panel-tabset}
+
+##### PAM OM 4
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba1
+
+cat("Visualizamos las soluciones\n")
+seq_plot_pam_om4_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4,
+                                 facet_ncol=2, facet_nrow=2, sortv=sil_pam_om_clus4_q) +
+  theme(legend.position = "none")+
+  labs(x="Trimestres", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_pam_om4_q
+```
+
+##### PAM OM 6
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba2
+seq_plot_pam_om6_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om6,
+                                 facet_ncol=2, facet_nrow=3, sortv=sil_pam_om_clus6_q) +
+  theme(legend.position = "none")+
+  labs(x="Trimestres", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_pam_om6_q
+```
+
+##### PAM OM 3
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba3
+seq_plot_pam_om3_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om3,
+                                 facet_ncol=2, facet_nrow=2, sortv= sil_pam_om_clus3_q) +
+  theme(legend.position = "none")+
+  labs(x="Trimestres", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_pam_om3_q
+```
+
+##### PAM OM 2
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba4
+seq_plot_pam_om2_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,
+                                 facet_ncol=2, facet_nrow=1, sortv= sil_pam_om_clus2_q) +
+  theme(legend.position = "none")+
+  labs(x="Trimestres", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_pam_om2_q 
+```
+
+:::
+
+La solución que obtuvo mejores ínices de ajuste ASW fue la de 6 conglomerados, mediante el algoritmo PAM y emparejamiento óptimo (OM). No obstante, los conglomerados 6624, TSM, 1 año después, otras causas y 6268, TSM, 1 año después, TSM, obtuvieron valores ASW negativos, por lo que dicha solución se descarta como alternativa. Por tanto, la solución que sigue en términos de valores ASW más altos es la de 4 conglomerados obtenidos mediante el algoritmo PAM y mediante emparejamiento óptimo (OM), con 0,58 vs. en ASW vs. 0,59 de la solución de 6 conglomerados. Las soluciones que le siguen presentan valores de 0,55 en ASW. La solución de 3 conglomerados distingue entre primer ingreso por TSM, TUS y una estadía de un semestre por TSM, pero la trayectoria de estadía por comorbilidad no emerge. Las soluciones de 2 conglomerados obtenidas mediante el algoritmo jerárquico fueron similares que las obtenidas mediante PAM, diferenciando por el motivo de ingreso entre ingresos por TSM y TUS.
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| paged.print: true
+#| label: "pre-cqis-bootstrap-quarter-tab"
+#| dpi: 500      # Resolución alta
+# results: hide
+# fig.show: hide
+
+opar <- par(no.readonly = TRUE)
+
+#par(mfrow = c(2, 2)) # 2 filas, 2 columnas
+
+#https://sequenceanalysis.org/2023/10/19/validating-sequence-analysis-typologies-using-parametric-bootstrap/
+
+cbind.data.frame(
+  algo= c(rep("HAC OM",4), rep("PAM OM", 10)),
+  type= c(rep("Duración y Secuencia",2),rep("Secuencia",2),rep("Duración y Secuencia",5),rep("Secuencia",5)),
+  conglomerados= c(rep(c("2", "MaxT 95%"),2), rep(c("4", "3", "2", "6", "MaxT 95%"),2)), rbind.data.frame(hac_om_quarter_null_comb_print$results_df[c(1,16),c("ASW", "HG", "PBC", "HC")], hac_om_quarter_null_seq_print$results_df[c(1,16),c("ASW", "HG", "PBC", "HC")], pam_om_quarter_null_comb_print$results_df[c(3,2,1,5,16),c("ASW", "HG", "PBC", "HC")], pam_om_quarter_null_seq_print$results_df[c(3,2,1,5,16),c("ASW", "HG", "PBC", "HC")]))|> 
+    `rownames<-`(NULL) |>
+  (\(df) {
+    rio::export(df, "_output/sol_conglomerados_tab_validacion_quarter_25.xlsx")            
+    knitr::kable(df, "markdown", caption = "Validación CQIs conglomerados (trimestre)")
+  })() 
+```
+
+Se descartó la solución de 2 conglomerados por ser demasiado simple y, por lo tanto, carecer de valor explicativo en relación con los estados discretos de interés (a saber, las causas de hospitalización). En contraste con una estructura de trayectoria de duración y secuencia aleatoria, los valores obtenidos en los índices Gamma de Hubbert (HG) y Correlación Punto-Biserial (PBC) se encuentran dentro del intervalo esperado para la solución de 7 conglomerados, mientras que para la solución de 4 conglomerados, el índice C de Hubbert también se encuentra dentro de ese intervalo sumado a los otros. Esto significa que sólo el ASW de la solución de 4 conglomerados es mayor que lo esperado. Ahora, en comparación a una estructura de trayectorias aleatoria en términos secuencias, ambas soluciones tienen valores de ASW, HC y PBC superiores al esperable, mientras que en el caso del índice HG sólo es superior al esperable para la solución de 7 conglomerados.
+
+Si observamos la tabla anterior, podemos notar que la solución otbenida mediante el algoritmo jerárquico (HAC) y emparejamiento óptimo (OM) con 2 conglomerados, obtuvo valores de ASW, HG, PBC y HC acorde a los esperados para una estructura de trayectorias aleatorias en términos de duración y secuencia en los índices ASW. Para los índices HG y PBC obtuvo valores más bajos que los esperados, mientras que para el índice HC obtuvo un valor más alto. Si observamos los valores esperados para uan estructura de secuencia aleatoria, la solución de 2 conglomerados obtuvo valores de ASW superiores a los esperados, pero inferiores a los esperados en el índice HG, y dentro de lo esperado en los índices PBC y HC.
+
+En el caso de la solución de 6 conglomerados vs. una estructura aleatoria en términos de duración y secuencia, obtuvo valores ASW superiores a los esperados y más bajos en HC, aunque bajo lo esperado en los índices HG y PBC. Posteriormente, comparándolo con seuencias aleatorias en términos de secuencia, la solución de 6 conglomerados obtuvo valores de ASW, HG, PBC y superiores a los esperados y un índice HC más que para una estructura de trayectorias aleatorias.
+
+Para las soluciones de 2 y 3 conglomerados vs. una estructura de duración y secuencia aleatorias, los valores ASW se encontraban dentro de lo esperado, mientras que los valores de HG, PBC y HC eran inferiores a lo esperado. En el caso de las soluciones de 2 y 3 conglomerados vs. una estructura de secuencia aleatoria, los valores de ASW fueron superiores al esperado e inferiores al esperado en el índice HG para ambas soluciones. No obstante, los valores PBC fueron superiores y los valores HC fueron inferiores para la solución de 3 conglomerados.
+
+Para la solución de 4 conglomerados vs una estructura de secuencia y duración aleatorias, los valores ASW fueron superiores y los HC inferiores al esperado, mientras que los valores HG y PBC fueron inferiores al esperado. Al compararse con una estructura de secuencia aleatoria, los valores ASW y PBC fueron superiores y el valor HC inferiores al esperado, aunque el valor en el índice HG fue más bajo que el esperado.
+
+A continuación se muestra con más detalle el resultado de pruebas de validación mediante bootstraps de la solución obtenida con el algoritmo PAM y emparejamiento óptimo.
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "pre-cqis-bootstrap-quarter-comb"
+#| fig.width: 12 # Ancho total del gráfico
+#| fig.height: 9 # Altura total del gráfico
+#| dpi: 500      # Resolución alta
+#| fig.cap: "Indicadores de calidad vs. bootstrap con secuencias y duraciones aleatorias"
+# results: hide
+# fig.show: hide
+
+ratio_plot=5
+asw_grob <- save_base_plot_as_grob(pam_om_quarter_null_comb_plot_asw, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hc_grob <- save_base_plot_as_grob(pam_om_quarter_null_comb_plot_hc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hg_grob <- save_base_plot_as_grob(pam_om_quarter_null_comb_plot_hg, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+pbc_grob <- save_base_plot_as_grob(pam_om_quarter_null_comb_plot_pbc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+
+final_plot_comb <- plot_grid(
+  asw_grob, hc_grob, hg_grob, pbc_grob,
+  ncol = 2,                    # Número de columnas
+  nrow = 2,                    # Número de filas
+  rel_widths = c(1, 1),        # Ancho relativo de los gráficos
+  rel_heights = c(1, 1),
+  labels = c("A", "B", "C", "D"),  # Etiquetas opcionales
+  label_size = 15,             # Tamaño de las etiquetas
+  align = "v",                 # Alineación vertical de los gráficos
+  axis = "tb"                  # Alineación de ejes superior e inferior
+)
+
+ggdraw() +
+  draw_plot(final_plot_comb, x = 0, y = 0.1, width = 1, height = 0.9) +
+  draw_text("Área gris: índices de agrupaciones aleatorias; línea negra: índices obtenidos", x = 0.05, y = 0.05, hjust = 0, size = 8, lineheight = .8)
+
+ggsave("_figs/pam_om_quarter_comb_qci_25.png", final_plot_comb, width = 12, height = 9, dpi = 600)
+```
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "pre-cqis-bootstrap-quarter-seq"
+#| fig.width: 12 # Ancho total del gráfico
+#| fig.height: 9 # Altura total del gráfico
+#| dpi: 500      # Resolución alta
+#| fig.cap: "Indicadores de calidad vs. bootstrap con secuencias aleatorias"
+# results: hide
+# fig.show: hide
+
+ratio_plot=5
+asw_grob <- save_base_plot_as_grob(pam_om_quarter_null_seq_plot_asw, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hc_grob <- save_base_plot_as_grob(pam_om_quarter_null_seq_plot_hc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hg_grob <- save_base_plot_as_grob(pam_om_quarter_null_seq_plot_hg, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+pbc_grob <- save_base_plot_as_grob(pam_om_quarter_null_seq_plot_pbc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+
+final_plot_seq <- plot_grid(
+  asw_grob, hc_grob, hg_grob, pbc_grob,
+  ncol = 2,                    # Número de columnas
+  nrow = 2,                    # Número de filas
+  rel_widths = c(1, 1),        # Ancho relativo de los gráficos
+  rel_heights = c(1, 1),
+  labels = c("A", "B", "C", "D"),  # Etiquetas opcionales
+  label_size = 15,             # Tamaño de las etiquetas
+  align = "v",                 # Alineación vertical de los gráficos
+  axis = "tb"                  # Alineación de ejes superior e inferior
+)
+
+ggdraw() +
+  draw_plot(final_plot_seq, x = 0, y = 0.1, width = 1, height = 0.9) +
+  draw_text("Área gris: índices de agrupaciones aleatorias; línea negra: índices obtenidos", x = 0.05, y = 0.05, hjust = 0, size = 8, lineheight = .8)
+
+ggsave("_figs/pam_om_quarter_seq_qci_25.png", final_plot_seq, width = 12, height = 9, dpi = 600)
+```
+
+
+#### 0.c.2. Mensual
+
+```{r, class="scrollable-code"}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "pre-cqis-month"
+#| results: hide
+#| fig.show: hide
+#| collapse: true
+
+perm_mes <- new.env()
+options(width = 1e4) #para ampliar la vista del capture output
+load("_perm/null_ssa_hc_month_om_comb_20250319.Rda", envir = perm_mes) 
+hac_om_month_null_comb_stats<-perm_mes$om_month_null_comb$stats
+hac_om_month_null_comb_print<-print.seqnullcqi.powder(perm_mes$om_month_null_comb)
+plot(perm_mes$om_month_null_comb, "ASW")
+hac_om_month_null_comb_plot_asw <- recordPlot()
+plot(perm_mes$om_month_null_comb, "HC")
+hac_om_month_null_comb_plot_hc <- recordPlot()
+plot(perm_mes$om_month_null_comb, "HG")
+hac_om_month_null_comb_plot_hg <- recordPlot()
+plot(perm_mes$om_month_null_comb, "PBC")
+hac_om_month_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_mes$om_month_null_comb, "ASW", type="density")
+hac_om_month_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_mes$om_month_null_comb, "HC", type="density")
+hac_om_month_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_mes$om_month_null_comb, "HG", type="density")
+hac_om_month_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_mes$om_month_null_comb, "PBC", type="density")
+hac_om_month_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(om_month_null_comb, envir = perm_mes)
+
+load("_perm/null_ssa_hc_month_om_seq_20250319.Rda", envir = perm_mes) 
+hac_om_month_null_seq_stats<-perm_mes$om_month_null_seq$stats
+hac_om_month_null_seq_print<-print.seqnullcqi.powder(perm_mes$om_month_null_seq)
+plot(perm_mes$om_month_null_seq, "ASW")
+hac_om_month_null_seq_plot_asw <- recordPlot()
+plot(perm_mes$om_month_null_seq, "HC")
+hac_om_month_null_seq_plot_hc <- recordPlot()
+plot(perm_mes$om_month_null_seq, "HG")
+hac_om_month_null_seq_plot_hg <- recordPlot()
+plot(perm_mes$om_month_null_seq, "PBC")
+hac_om_month_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_mes$om_month_null_seq, "ASW", type="density")
+hac_om_month_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_mes$om_month_null_seq, "HC", type="density")
+hac_om_month_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_mes$om_month_null_seq, "HG", type="density")
+hac_om_month_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_mes$om_month_null_seq, "PBC", type="density")
+hac_om_month_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(om_month_null_seq, envir = perm_mes)
+
+load("_perm/null_ssa_hc_month_lcs_comb_20250319.Rda", envir = perm_mes)
+hac_lcs_month_null_comb_stats<-perm_mes$lcs_month_null_comb$stats
+hac_lcs_month_null_comb_print<-print.seqnullcqi.powder(perm_mes$lcs_month_null_comb)
+plot(perm_mes$lcs_month_null_comb, "ASW")
+hac_lcs_month_null_comb_plot_asw <- recordPlot()
+plot(perm_mes$lcs_month_null_comb, "HC")
+hac_lcs_month_null_comb_plot_hc <- recordPlot()
+plot(perm_mes$lcs_month_null_comb, "HG")
+hac_lcs_month_null_comb_plot_hg <- recordPlot()
+plot(perm_mes$lcs_month_null_comb, "PBC")
+hac_lcs_month_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_mes$lcs_month_null_comb, "ASW", type="density")
+hac_lcs_month_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_mes$lcs_month_null_comb, "HC", type="density")
+hac_lcs_month_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_mes$lcs_month_null_comb, "HG", type="density")
+hac_lcs_month_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_mes$lcs_month_null_comb, "PBC", type="density")
+hac_lcs_month_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(lcs_month_null_comb, envir = perm_mes)
+
+load("_perm/null_ssa_hc_month_lcs_seq_20250319.Rda", envir = perm_mes)
+hac_lcs_month_null_seq_stats<-perm_mes$lcs_month_null_seq$stats
+hac_lcs_month_null_seq_print<-print.seqnullcqi.powder(perm_mes$lcs_month_null_seq)
+plot(perm_mes$lcs_month_null_seq, "ASW")
+hac_lcs_month_null_seq_plot_asw <- recordPlot()
+plot(perm_mes$lcs_month_null_seq, "HC")
+hac_lcs_month_null_seq_plot_hc <- recordPlot()
+plot(perm_mes$lcs_month_null_seq, "HG")
+hac_lcs_month_null_seq_plot_hg <- recordPlot()
+plot(perm_mes$lcs_month_null_seq, "PBC")
+hac_lcs_month_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_mes$lcs_month_null_seq, "ASW", type="density")
+hac_lcs_month_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_mes$lcs_month_null_seq, "HC", type="density")
+hac_lcs_month_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_mes$lcs_month_null_seq, "HG", type="density")
+hac_lcs_month_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_mes$lcs_month_null_seq, "PBC", type="density")
+hac_lcs_month_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(lcs_month_null_seq, envir = perm_mes)
+
+load("_perm/null_ssa_pam_month_om_comb_20250319.Rda", envir = perm_mes)
+pam_om_month_null_comb_stats<-perm_mes$pam_om_month_null_comb$stats
+pam_om_month_null_comb_print<-print.seqnullcqi.powder(perm_mes$pam_om_month_null_comb)
+plot(perm_mes$pam_om_month_null_comb, "ASW")
+pam_om_month_null_comb_plot_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb, "HC")
+pam_om_month_null_comb_plot_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb, "HG")
+pam_om_month_null_comb_plot_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb, "PBC")
+pam_om_month_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_om_month_null_comb, "ASW", type="density")
+pam_om_month_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb, "HC", type="density")
+pam_om_month_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb, "HG", type="density")
+pam_om_month_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb, "PBC", type="density")
+pam_om_month_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_month_null_comb, envir = perm_mes)
+
+load("_perm/null_ssa_pam_month_om_seq_20250319.Rda", envir = perm_mes)
+pam_om_month_null_seq_stats<-perm_mes$pam_om_month_null_seq$stats
+pam_om_month_null_seq_print<-print.seqnullcqi.powder(perm_mes$pam_om_month_null_seq)
+plot(perm_mes$pam_om_month_null_seq, "ASW")
+pam_om_month_null_seq_plot_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq, "HC")
+pam_om_month_null_seq_plot_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq, "HG")
+pam_om_month_null_seq_plot_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq, "PBC")
+pam_om_month_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_om_month_null_seq, "ASW", type="density")
+pam_om_month_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq, "HC", type="density")
+pam_om_month_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq, "HG", type="density")
+pam_om_month_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq, "PBC", type="density")
+pam_om_month_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_month_null_seq, envir = perm_mes)
+
+load("_perm/null_ssa_pam_month_lcs_comb_20250319.Rda", envir = perm_mes) 
+pam_lcs_month_null_comb_stats<-perm_mes$pam_lcs_month_null_comb$stats
+pam_lcs_month_null_comb_print<-print.seqnullcqi.powder(perm_mes$pam_lcs_month_null_comb)
+plot(perm_mes$pam_lcs_month_null_comb, "ASW")
+pam_lcs_month_null_comb_plot_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb, "HC")
+pam_lcs_month_null_comb_plot_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb, "HG")
+pam_lcs_month_null_comb_plot_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb, "PBC")
+pam_lcs_month_null_comb_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_lcs_month_null_comb, "ASW", type="density")
+pam_lcs_month_null_comb_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb, "HC", type="density")
+pam_lcs_month_null_comb_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb, "HG", type="density")
+pam_lcs_month_null_comb_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb, "PBC", type="density")
+pam_lcs_month_null_comb_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_month_null_comb, envir = perm_mes)
+
+load("_perm/null_ssa_pam_month_lcs_seq_20250319.Rda", envir = perm_mes)
+pam_lcs_month_null_seq_stats<-perm_mes$pam_lcs_month_null_seq$stats
+pam_lcs_month_null_seq_print<-print.seqnullcqi.powder(perm_mes$pam_lcs_month_null_seq)
+plot(perm_mes$pam_lcs_month_null_seq, "ASW")
+pam_lcs_month_null_seq_plot_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq, "HC")
+pam_lcs_month_null_seq_plot_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq, "HG")
+pam_lcs_month_null_seq_plot_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq, "PBC")
+pam_lcs_month_null_seq_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_lcs_month_null_seq, "ASW", type="density")
+pam_lcs_month_null_seq_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq, "HC", type="density")
+pam_lcs_month_null_seq_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq, "HG", type="density")
+pam_lcs_month_null_seq_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq, "PBC", type="density")
+pam_lcs_month_null_seq_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_month_null_seq, envir = perm_mes)
+
+load("_perm/null_ssa_pam_om_month_null_comb2_20250319.Rda", envir = perm_mes) #no está
+pam_om_month_null_comb2_stats<-perm_mes$pam_om_month_null_comb2$stats
+pam_om_month_null_comb2_print<-print.seqnullcqi.powder(perm_mes$pam_om_month_null_comb2)
+plot(perm_mes$pam_om_month_null_comb2, "ASW")
+pam_om_month_null_comb2_plot_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb2, "HC")
+pam_om_month_null_comb2_plot_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb2, "HG")
+pam_om_month_null_comb2_plot_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb2, "PBC")
+pam_om_month_null_comb2_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_om_month_null_comb2, "ASW", type="density")
+pam_om_month_null_comb2_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb2, "HC", type="density")
+pam_om_month_null_comb2_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb2, "HG", type="density")
+pam_om_month_null_comb2_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_comb2, "PBC", type="density")
+pam_om_month_null_comb2_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_month_null_comb2, envir = perm_mes)
+
+load("_perm/null_ssa_pam_om_month_null_seq2_20250319.Rda", envir = perm_mes) #no está
+pam_om_month_null_seq2_stats<-perm_mes$pam_om_month_null_seq2$stats
+pam_om_month_null_seq2_print<-print.seqnullcqi.powder(perm_mes$pam_om_month_null_seq2)
+plot(perm_mes$pam_om_month_null_seq2, "ASW")
+pam_om_month_null_seq2_plot_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq2, "HC")
+pam_om_month_null_seq2_plot_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq2, "HG")
+pam_om_month_null_seq2_plot_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq2, "PBC")
+pam_om_month_null_seq2_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_om_month_null_seq2, "ASW", type="density")
+pam_om_month_null_seq2_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq2, "HC", type="density")
+pam_om_month_null_seq2_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq2, "HG", type="density")
+pam_om_month_null_seq2_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_om_month_null_seq2, "PBC", type="density")
+pam_om_month_null_seq2_plot_dens_pbc <- recordPlot()
+
+rm(pam_om_month_null_seq2, envir = perm_mes)
+
+load("_perm/null_ssa_pam_month_lcs_comb2_20250319.Rda", envir = perm_mes)
+pam_lcs_month_null_comb2_stats<-perm_mes$pam_lcs_month_null_comb2$stats
+pam_lcs_month_null_comb2_print<-print.seqnullcqi.powder(perm_mes$pam_lcs_month_null_comb2)
+plot(perm_mes$pam_lcs_month_null_comb2, "ASW")
+pam_lcs_month_null_comb2_plot_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb2, "HC")
+pam_lcs_month_null_comb2_plot_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb2, "HG")
+pam_lcs_month_null_comb2_plot_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb2, "PBC")
+pam_lcs_month_null_comb2_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_lcs_month_null_comb2, "ASW", type="density")
+pam_lcs_month_null_comb2_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb2, "HC", type="density")
+pam_lcs_month_null_comb2_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb2, "HG", type="density")
+pam_lcs_month_null_comb2_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_comb2, "PBC", type="density")
+pam_lcs_month_null_comb2_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_month_null_comb2, envir = perm_mes)
+
+load("_perm/null_ssa_pam_month_lcs_seq2_20250319.Rda", envir = perm_mes) 
+pam_lcs_month_null_seq2_stats<-perm_mes$pam_lcs_month_null_seq2$stats
+pam_lcs_month_null_seq2_print<-print.seqnullcqi.powder(perm_mes$pam_lcs_month_null_seq2)
+plot(perm_mes$pam_lcs_month_null_seq2, "ASW")
+pam_lcs_month_null_seq2_plot_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq2, "HC")
+pam_lcs_month_null_seq2_plot_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq2, "HG")
+pam_lcs_month_null_seq2_plot_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq2, "PBC")
+pam_lcs_month_null_seq2_plot_pbc <- recordPlot()
+
+plot(perm_mes$pam_lcs_month_null_seq2, "ASW", type="density")
+pam_lcs_month_null_seq2_plot_dens_asw <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq2, "HC", type="density")
+pam_lcs_month_null_seq2_plot_dens_hc <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq2, "HG", type="density")
+pam_lcs_month_null_seq2_plot_dens_hg <- recordPlot()
+plot(perm_mes$pam_lcs_month_null_seq2, "PBC", type="density")
+pam_lcs_month_null_seq2_plot_dens_pbc <- recordPlot()
+
+rm(pam_lcs_month_null_seq2, envir = perm_mes)
+
+options(width = getOption("width"))
+
+rm(perm_mes)
+rm(perm_mes_alt)
+```
+
+
+<div class="scrollable-content">
+```{r, class="scrollable-code"}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "cqis-month"
+
+cqi_month<-
+rbind.data.frame(
+cbind.data.frame(algo="hac", type="om", time="month", k=2:15, corr=F, om_dist_month_c$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="hac", type="lcs", time="month", k=2:15, corr=F, lcs_dist_month_c$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="om", time="month", k=2:15, corr=F, pamRange_month_om$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="om", time="month", k=2:15, corr=T, pamRange_month_om2$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="lcs", time="month", k=2:15, corr=F, pamRange_month_lcs$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2))),
+cbind.data.frame(algo="pam", type="lcs", time="month", k=2:15, corr=T, pamRange_month_lcs2$stats) |> dplyr::mutate(across(PBC:HC,~round(.,2)))
+) |> 
+  dplyr::select(algo, type, time, k, corr, PBC, ASW, HC, HG, R2, R2sq)
+
+tabs_month_clus_sol<-
+rbind.data.frame(
+func_tab_range_clus(om_dist_month_c),
+func_tab_range_clus(lcs_dist_month_c),
+func_tab_range_clus(pamRange_month_om),
+func_tab_range_clus(pamRange_month_om2),
+func_tab_range_clus(pamRange_month_lcs),
+func_tab_range_clus(pamRange_month_lcs2)
+)
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+# Inicializamos una lista para almacenar los resultados
+resultados_list <- list()
+# Definimos un rango para los clusters a evaluar
+cluster_range <- 2:15
+# Definimos los métodos y sus variables
+metodos <- list(
+    hac_om = list(data = om_dist_month_c, dist = dist_month_om),
+    hac_lcs = list(data = lcs_dist_month_c, dist = dist_month_lcs),
+    pam_om0 = list(data = pamRange_month_om, dist = dist_month_om),
+    pam_om1 = list(data = pamRange_month_om2, dist = dist_month_om),
+    pam_lcs0 = list(data = pamRange_month_lcs, dist = dist_month_lcs),
+    pam_lcs1 = list(data = pamRange_month_lcs2, dist = dist_month_lcs)
+)
+# Número máximo de clusters para definir las columnas
+max_clusters <- max(cluster_range)
+# Iteramos sobre cada método
+for (metodo in names(metodos)) {
+    # Creamos un data frame temporal para cada método
+    metodo_result <- data.frame()
+    # Iteramos sobre cada cluster en el rango
+    for (cluster in cluster_range) {
+        # Construimos el nombre del cluster dinámicamente
+        cluster_name <- paste0("cluster", cluster)
+        # Intentamos calcular los valores de silhouette
+        silhouette_values <- tryCatch(
+            round(summary(silhouette(as.integer(metodos[[metodo]]$data$clustering[[cluster_name]]), as.dist(metodos[[metodo]]$dist)))$clus.avg.widths[attr(rev(sort(table(metodos[[metodo]]$data$clustering[[cluster_name]]))),"names")], 2),
+            error = function(e) rep(NA, cluster)
+        )
+        # Creamos un vector con las columnas llenando con NA si faltan valores
+        silhouette_full <- c(silhouette_values, rep(NA, max_clusters - length(silhouette_values)))
+        # Creamos un data frame temporal con los resultados para este cluster
+        cluster_result <- data.frame(
+            Metodo = metodo,
+            Cluster = cluster,
+            t(silhouette_full) # Transponemos los valores para que cada uno sea una columna
+        )
+        # Nombramos dinámicamente las columnas de silhouette
+        colnames(cluster_result)[3:(3 + max_clusters - 1)] <- paste0("asw", 1:max_clusters)
+        # Añadimos el resultado del cluster al data frame del método
+        metodo_result <- rbind(metodo_result, cluster_result)
+    }
+    # Agregamos los resultados del método a la lista general
+    resultados_list[[metodo]] <- metodo_result
+}
+# Combinamos todos los resultados en un único data frame
+avs_por_cluster_month <- do.call(rbind, resultados_list)
+# Ordenamos por Método y Cluster
+avs_por_cluster_month <- avs_por_cluster_month[order(avs_por_cluster_month$Metodo, avs_por_cluster_month$Cluster), ]
+
+
+bind_cols(cqi_month, tabs_month_clus_sol)|>
+  dplyr::mutate(corr= dplyr::case_when(corr==TRUE & algo!="hac"~"1",corr==FALSE & algo!="hac"~"0",T~""), key= paste0(algo,"_",type,corr,"_",k))|> 
+  left_join(dplyr::mutate(avs_por_cluster_month, key=paste0(Metodo,"_",Cluster)), by="key")|> 
+  dplyr::select(-Metodo, -Cluster) |> 
+            `rownames<-`(NULL) |>
+  dplyr::mutate(calc= round(PBC*(1/HC)*HG,2)) |> 
+  dplyr::arrange(desc(ASW)) |>
+  dplyr::select(c("algo", "type", "time", "k", "corr", "PBC", "ASW", "HC", "HG", "R2", "R2sq", "calc", paste0("X",1:15), paste0("asw",1:15)))|> 
+  (\(df) {
+    assign("asw_month_qci", dplyr::select(df, -"time"), envir = .GlobalEnv)
+    rio::export(df, "_output/sol_conglomerados_tab_month_25.xlsx")            
+    knitr::kable(df, "markdown", caption = "CQIs y frecuencias en conglomerados (mensual)")
+  })()
+```
+</div>
+
+```{r}
+#| eval: false
+#| label: "frobenius norm of residuals"
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| paged.print: true
+#| results: "hold"
+
+frobenius_norm(as.matrix(func_tab_range_clus(pamRange_quarter_lcs)), as.matrix(func_tab_range_clus(pamRange_quarter_lcs2)))
+
+invisible("Frobenius norm: ||A-B||_F=\sqrt{\sum{i,j}(A_{ij}-B_ij)^2}")
+invisible("Por ahora lo dejamos pasar, es para comparar matrices y sus diferencias")
+```
+
+La mayoría de las soluciones presentaron conglomerados con tamaños muy pequeños (n < 30), lo que limita su generalización y sugiere una estabilidad presumiblemente baja, o bien con valores ASW negativos, lo que añade evidencia a problemas de estabilidad de la solución.
+
+```{r}
+#| label: "asw-indicador-scree-month"
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+#| fig.cap: "Gráfico de codo, ASW con etiquetas soluciones de conglomerados (soluciones de res. mensual)"
+
+asw_month_qci$label<-with(asw_month_qci, paste0(algo, "_",type, "_", k, "_", ifelse(corr==1,1,ifelse(corr==0,0,0))))
+plot(sort(asw_month_qci$ASW, decreasing = TRUE), 
+     type = "b", 
+     pch = 19, 
+     xlab = "", 
+     xaxt = "n",
+     ylab = "Valor de ASW", 
+     main = "", 
+     col = "blue")
+axis(1, at = 1:length(asw_month_qci$label), labels = asw_month_qci$label, las = 2, cex.axis = 0.60)
+```
+
+Sólo las soluciones de 2 y 3 conglomerados obtuvieron valores ASW en cada conglomerados superiores a 0, es decir, no obtuvieron conglomerados negativos.
+
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "preparacion-siluetas-mes"
+
+categories_hac_om2_m<-attr(States_Wide.seq_month_t_prim_adm_cens, "labels")
+new_labels2 <- categories_hac_om2_m
+new_labels2[which(categories_hac_om2_m == "Otras causas")] <- "Otras\ncausas"
+#new_labels[which(categories == "Consumo\nde sustancias")] <- "Consumo de\nsustancias"
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("(==============================================================)\n")
+cat("Hacemos clasificación de pertenencia cluster a las soluciones candidatas y añadimos etiquetas\n")
+
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_hc_om2 <-
+  factor(om_dist_month_c$clustering$cluster2,levels=rev(attr( sort(table(om_dist_month_c$clustering$cluster2)), "name")), labels= c("1, Un trimestre, TSM(1)", "2, Múltiples episodios, TSM(2)"))
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_hc_om3 <-
+  factor(om_dist_month_c$clustering$cluster3, levels=rev(attr( sort(table(om_dist_month_c$clustering$cluster3)), "name")), labels= c("1, Un trimestre, TSM(1)", "2, Un trimestre, TUS y Comorbilidad(3)", "3, Múltiples episodios, TSM(2)"))
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2 <-
+  factor(pamRange_month_om$clustering$cluster2,levels=rev(attr( sort(table(pamRange_month_om$clustering$cluster2)), "name")),
+         labels= c("6623, Un trimestre, TSM y Comorbilidad(2)", "6612, Un trimestre TSM(1)"))
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("(==============================================================)\n")
+cat("Creamos valores ASW para las soluciones candidatas\n")
+# Creamos un vector con las columnas llenando con NA si faltan valores
+# 
+sil_hc_om_clus2_m <- wcSilhouetteObs(as.dist(dist_month_om), 
+        om_dist_month_c$clustering$cluster2, measure="ASW")
+sil_hc_om_clus3_m <- wcSilhouetteObs(as.dist(dist_month_om), 
+        om_dist_month_c$clustering$cluster3, measure="ASW")
+sil_pam_om_clus2_m <- wcSilhouetteObs(as.dist(dist_month_om), 
+        pamRange_month_om$clustering$cluster2, measure="ASW")
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+```
+
+
+::: {.panel-tabset}
+
+##### HC OM 2
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba1-m
+cat("(==============================================================)\n")
+cat("Visualizamos las soluciones\n")
+seq_plot_hc_om2_m <- ggseqiplot(States_Wide.seq_month_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_hc_om2,
+                                  #om_dist_month_c$clustering$cluster2,
+                                 facet_ncol=2, facet_nrow=1, sortv=sil_hc_om_clus2_m) +
+  theme(legend.position = "none")+
+  labs(x="Meses", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_hc_om2_m
+```
+
+##### HC OM 3
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba2-m
+
+seq_plot_hc_om3_m <- ggseqiplot(States_Wide.seq_month_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_hc_om3,
+                                 facet_ncol=2, facet_nrow=2, sortv=sil_hc_om_clus3_m) +
+  theme(legend.position = "none")+
+  labs(x="Meses", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_hc_om3_m
+```
+
+
+##### PAM OM 2
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, orden de sujetos según el primer estado observado y su duración, representando a cada individuo como una línea en el gráfico (observaciones ordenadas de acuerdo a ASW)"
+#| results: "hold"
+#| fig-width: 9.5
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: cluster-grafico-trayectorias-prueba3-m
+
+seq_plot_pam_om2_m <- ggseqiplot(States_Wide.seq_month_t_prim_adm_cens, 
+                                 group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,
+                                 facet_ncol=2, facet_nrow=2, sortv=sil_pam_om_clus2_m) +
+  theme(legend.position = "none")+
+  labs(x="Meses", y="# IDs de usuarios")+
+  #guides(fill = guide_legend(nrow = 1))+
+  theme(
+    panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
+    axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
+    axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
+    axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
+    axis.title.y = element_text(size = 15, margin = margin(r = -10)),#,margin = margin(l = -10)),
+    strip.text = element_text(size = 11, margin = margin(b =-15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),  # Alinea el título de la leyenda hacia la izquierda
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom", 
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
+    strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
+    #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda
+  )+
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                  "#FFFFFF","#808080","#000000"))+
+  scale_color_manual(labels = new_labels, values=c("#E2725B", "#556B2F", "#D2B48C",#"#8B4513",
+                                                   "#FFFFFF","#808080","#000000"))
+seq_plot_pam_om2_m
+```
+
+:::
+
+De las solciones de conglomerados que no obtuvieron algún conglomerado con valores ASW negativos, la solución que obtuvo mejores ínices de ajuste ASW fue la de 2 conglomerados, mediante el algoritmo jerárquico y emparejamiento óptimo (OM) con valores ASW 0,86. Sin embargo, la agrupación es muy poco informativa respecto a los motivos (ej., un episodio de cualquier tipo, vs. múltiples episodios). Por otra parte, la agrupación con múltiples episodios está compuesta por menos de 30 observaciones.
+
+La siguiente solución obtuvo índices de ajuste subóptimos (ASW= 0,41), aunque logró distinguir por diagnóstico del episodio hospitalario, aunque persiste un tercer grupo con múltiples episodios con menos de 30 observaciones.
+
+La tercera y cuarta soluciones obtuvieron un índice de ajuste supótimos (ASW=0,40), aunque distinguir entre ingresos con diagnósticos TSM el primer semestre, vs. el primer trimestre por TSM.
+
+A continuación, vemos los índices de calidad de la solución mediante remuestreos *bootstrap* con al menos 1,000 replicaciones.
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "pre-cqis-bootstrap-month-tab"
+#| fig.width: 12 # Ancho total del gráfico
+#| fig.height: 9 # Altura total del gráfico
+#| dpi: 500      # Resolución alta
+# results: hide
+# fig.show: hide
+
+opar <- par(no.readonly = TRUE)
+
+#par(mfrow = c(2, 2)) # 2 filas, 2 columnas
+
+#https://sequenceanalysis.org/2023/10/19/validating-sequence-analysis-typologies-using-parametric-bootstrap/
+
+cbind.data.frame(
+  algo= c(rep("PAM OM",2)),
+  type= c(rep("Duración y secuencia",2),rep("Secuencia",2)),
+  conglomerados= c("2","MaxT 95%"), rbind.data.frame(pam_om_month_null_comb_print$results_df[c(1,16),c("ASW", "HG", "PBC", "HC")], pam_om_month_null_seq_print$results_df[c(1,16),c("ASW", "HG", "PBC", "HC")]))|> 
+  (\(df) {
+        rio::export(df, "_output/sol_conglomerados_tab_m_validacion_25.xlsx")            
+        knitr::kable(df, "markdown", caption = "Validación CQIs conglomerados (mes)")
+  })()   
+```
+
+Sólo los índices ASW mostraron mejores índices de calidad que los esperados para una estructura aleatoria en términos de secuencias, mientras que el resto de los índices se encuentran dentro o por debajo de los rangos esperados. Para el resto de los indicadores, se encuentran por debajo de una estructura de secuencias aleatorias en duración y secuencia. 
+
+A continuación se muestra el resultado de pruebas de validación mediante bootstraps.
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "pre-cqis-bootstrap-month-comb"
+#| fig.width: 12 # Ancho total del gráfico
+#| fig.height: 9 # Altura total del gráfico
+#| dpi: 500      # Resolución alta
+#| fig.cap: "Indicadores de calidad vs. bootstrap con secuencias y duraciones aleatorias"
+# results: hide
+# fig.show: hide
+
+ratio_plot=5
+asw_grob_m <- save_base_plot_as_grob(pam_om_month_null_comb_plot_asw, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hc_grob_m <- save_base_plot_as_grob(pam_om_month_null_comb_plot_hc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hg_grob_m <- save_base_plot_as_grob(pam_om_month_null_comb_plot_hg, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+pbc_grob_m <- save_base_plot_as_grob(pam_om_month_null_comb_plot_pbc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+
+final_plot_comb_m <- plot_grid(
+  asw_grob_m, hc_grob_m, hg_grob_m, pbc_grob_m,
+  ncol = 2,                    # Número de columnas
+  nrow = 2,                    # Número de filas
+  rel_widths = c(1, 1),        # Ancho relativo de los gráficos
+  rel_heights = c(1, 1),
+  labels = c("A", "B", "C", "D"),  # Etiquetas opcionales
+  label_size = 15,             # Tamaño de las etiquetas
+  align = "v",                 # Alineación vertical de los gráficos
+  axis = "tb"                  # Alineación de ejes superior e inferior
+)
+
+ggdraw() +
+  draw_plot(final_plot_comb_m, x = 0, y = 0.1, width = 1, height = 0.9) +
+  draw_text("Área gris: índices de agrupaciones aleatorias; línea negra: índices obtenidos", x = 0.05, y = 0.05, hjust = 0, size = 8, lineheight = .8)
+
+ggsave("_figs/pam_om_month_comb_qci_25.png", final_plot_comb_m, width = 12, height = 9, dpi = 600)
+
+```
+
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| label: "pre-cqis-bootstrap-month-seq"
+#| fig.width: 12 # Ancho total del gráfico
+#| fig.height: 9 # Altura total del gráfico
+#| dpi: 500      # Resolución alta
+#| fig.cap: "Indicadores de calidad vs. bootstrap con secuencias aleatorias"
+# results: hide
+# fig.show: hide
+
+ratio_plot=5
+asw_grob_seq_m <- save_base_plot_as_grob(pam_om_month_null_seq_plot_asw, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hc_grob_seq_m <- save_base_plot_as_grob(pam_om_month_null_seq_plot_hc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+hg_grob_seq_m <- save_base_plot_as_grob(pam_om_month_null_seq_plot_hg, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+pbc_grob_seq_m <- save_base_plot_as_grob(pam_om_month_null_seq_plot_pbc, width = 800*ratio_plot, height = 600*ratio_plot, res=500)
+
+final_plot_m_seq <- plot_grid(
+  asw_grob_seq_m, hc_grob_seq_m, hg_grob_seq_m, pbc_grob_seq_m,
+  ncol = 2,                    # Número de columnas
+  nrow = 2,                    # Número de filas
+  rel_widths = c(1, 1),        # Ancho relativo de los gráficos
+  rel_heights = c(1, 1),
+  labels = c("A", "B", "C", "D"),  # Etiquetas opcionales
+  label_size = 15,             # Tamaño de las etiquetas
+  align = "v",                 # Alineación vertical de los gráficos
+  axis = "tb"                  # Alineación de ejes superior e inferior
+)
+
+ggdraw() +
+  draw_plot(final_plot_m_seq, x = 0, y = 0.1, width = 1, height = 0.9) +
+  draw_text("Área gris: índices de agrupaciones aleatorias; línea negra: índices obtenidos", x = 0.05, y = 0.05, hjust = 0, size = 8, lineheight = .8)
+
+ggsave("_figs/pam_om_month_seq_qci_25.png", final_plot_m_seq, width = 12, height = 9, dpi = 600)
+
+```
+
+
+<br> 
+
+
+# Información de la sesión
+
+```{r session-info, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+message(paste0("R library: ", Sys.getenv("R_LIBS_USER")))
+message(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time())))
+message(paste0("Editor context: ", getwd()))
+
+cat("quarto version: "); system("quarto --version") 
+
+save.image("avance25011725_pre_25.RData")
+```
+
+
+```{r session-info-r, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+#| class-output: center-table
+
+sesion_info <- devtools::session_info()
+dplyr::select(
+  tibble::as_tibble(sesion_info$packages),
+  c(package, loadedversion, source)
+) |> 
+ knitr::kable(caption = "R packages", format = "html",
+      col.names = c("Row number", "Package", "Version"),
+    row.names = FALSE,
+      align = c("c", "l", "r")) |> 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```
+
+
+```{r session-info-python, echo=T, error=T, message=TRUE, paged.print=TRUE,eval=T}
+#| class-output: center-table
+
+reticulate::py_list_packages()|> 
+ knitr::kable(caption = "Python packages", format = "html",
+      col.names = c("Package", "Version", "Requirement"),
+    row.names = FALSE,
+      align = c("c", "l", "r", "r"))|> 
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"),font_size = 12) |> 
+  kableExtra::scroll_box(width = "100%", height = "375px")  
+```

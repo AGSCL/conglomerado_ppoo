@@ -52,7 +52,9 @@ cat("\014")
 if(Sys.info()["sysname"]=="Windows"){
  folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
                        "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
-                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
+                       ifelse(dir.exists("H:/My drive/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
+                       "H:/My drive/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
+                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/"))
 } else {folder_path <- ""}
 load(paste0(folder_path,"avance250117_25.RData"))
 ```
@@ -69,16 +71,8 @@ load(paste0(folder_path,"avance250117_25.RData"))
 
 #elegir repositorio
 if(Sys.info()["sysname"]=="Windows"){
-  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
-}
-options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
-
-#borrar caché
-#system("fc-cache -f -v")
-
-#elegir repositorio
-if(Sys.info()["sysname"]=="Windows"){
-  options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+  #options(repos = c(CRAN = "https://cran.dcc.uchile.cl/"))
+  options(repos = c(CRAN = "https://cran.rstudio.com/"))
 }
 options(install.packages.check.source = "yes") # Chequea la fuente de los paquetes
 
@@ -130,6 +124,7 @@ if(!require(DiagrammeRsvg)){install.packages("DiagrammeRsvg"); require(Diagramme
 if(!require(rsvg)){install.packages("rsvg"); require(rsvg)}
 if(!require(survminer)){install.packages("survminer"); require(survminer)}
 if(!require(epitools)){install.packages("epitools"); require(epitools)}
+if(!require(biostat3)){install.packages("biostat3"); require(biostat3)}
 
 ```
 
@@ -191,8 +186,8 @@ tabla_prop_fila <- prop.table(tabla_conteo, 1)
 tabla_prop_col <- prop.table(tabla_conteo, 2)
 
 # Redondear ambas
-tabla_prop_fila <- sprintf("%1.2f", tabla_prop_fila)
-tabla_prop_col <- sprintf("%1.2f", tabla_prop_col)
+tabla_prop_fila <- sprintf("%1.1f", tabla_prop_fila*100)
+tabla_prop_col <- sprintf("%1.1f", tabla_prop_col*100)
 
 # Combinar ambas proporciones en el formato "fila / col"
 tabla_combinada <- matrix(
@@ -205,12 +200,15 @@ tabla_combinada <- matrix(
 
 # Convertir la tabla a un formato limpio con kable
 tabla_combinada |> 
+  data.frame() |> 
+  select(`X6623`, `X6612`, `X6522`, `X6574`) |> 
   kable(
-    caption = "Proporciones de Clusters (por fila / por columna), Solución de 6 vs. 4 conglomerados", 
-    col.names = c("6522, Un semestre TSM(2)", 
-                  "6574, Comorbilidad un trimestre(3)", 
+    caption = "Porcentajes de Clusters (por fila / por columna), Solución de 6 vs. 4 conglomerados", 
+    col.names = c("6623, Un trimestre, TSM(4)", 
                   "6612, Un trimestre, TUS(4)", 
-                  "6623, Un trimestre, TSM(4)"), 
+                  "6522, Un semestre TSM(2)", 
+                  "6574, Comorbilidad un trimestre(3)"
+                  ), 
     align = "c"
   ) |> 
   kable_classic() |> 
@@ -356,6 +354,709 @@ Entre quienes experimentaron una trayectoria conssitente en ingresar por trastor
 - **F32.3 (n=35)** - Trastorno depresivo mayor, episodio único, grave, con características psicóticas.
 - **F20.0 (n=34)** - Esquizofrenia paranoide.
 - **F43.2 (n=27)** - Trastorno por estrés postraumático (TEPT).
+
+
+
+```{r 21b-act-por-cie10}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+# Trastornos mentales orgánicos: F00.0-F09.9 (F000 a F099)
+in_organic <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F0[0-9]", codigo)
+})
+
+# Trastornos por uso de sustancias: F10.0-F19.9 (F10 a F19)
+in_substance <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F1[0-9]", codigo)
+})
+
+# Esquizofrenia: F20.0-F20.9 (F20)
+in_esquizofrenia <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F20", codigo)
+})
+
+# Otros trastornos psicóticos no afectivos: F21.0-F29.9 (F21 a F29)
+in_otros_psicoticos <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F2[1-9]", codigo)
+})
+
+# Trastornos bipolares: F30.0-F31.9 (F30 o F31)
+in_bipolares <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^(F30|F31)", codigo)
+})
+
+# Trastornos depresivos y otros del estado de ánimo: F32.0-F39.9 (F32 a F39)
+in_depresivos <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F3[2-9]", codigo)
+})
+
+# Trastornos de ansiedad: F40.0-F49.9 (F40 a F49)
+in_ansiedad <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F4[0-9]", codigo)
+})
+
+# Trastornos de la personalidad: F60.0-F69.9 (F60 a F69)
+in_personalidad <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^F6[0-9]", codigo)
+})
+
+# LESIONES AUTOINFLIGIDAS INTENCIONALMENTE (X60-X84)
+in_lesiones <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^X6[0-9]|^X7[0-9]|^X8[0-4]", codigo)
+})
+
+#Mortier, P., Conde, S., Alayo, I., Amigo, F., Ballester, L., Amell, R. C., Guinart, D., Contaldo, S. F., Ferrer, M., Leis, A., Mayer, M. A., Portillo-Van Diest, A., Puértolas-Gracia, B., Ramírez-Anguita, J. M., Peña-Salazar, C., Sanz, F., Kessler, R. C., Palao, D., Sola, V. P., . . .  Alonso, J. (2024). Premature Death, Suicide, and Nonlethal Intentional Self-Harm After Psychiatric Discharge. JAMA Network Open, 7(6), e2417131. https://doi.org/10.1001/jamanetworkopen.2024.17131
+in_lesiones_amplio <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^(T3[6-9]|T4[0-9]|T5[0-9]|T6[0-5])", codigo)
+})
+
+agregar_columnas_icd <- function(df) {
+  # Especificamos las columnas de diagnóstico
+  diag_cols <- paste0("diag", 1:11)
+  
+  df |>
+    mutate(
+      organic = rowSums(across(all_of(diag_cols), ~ in_organic(.))) > 0,
+      substance = rowSums(across(all_of(diag_cols), ~ in_substance(.))) > 0,
+      esquizofrenia = rowSums(across(all_of(diag_cols), ~ in_esquizofrenia(.))) > 0,
+      otros_psicoticos = rowSums(across(all_of(diag_cols), ~ in_otros_psicoticos(.))) > 0,
+      bipolares = rowSums(across(all_of(diag_cols), ~ in_bipolares(.))) > 0,
+      depresivos = rowSums(across(all_of(diag_cols), ~ in_depresivos(.))) > 0,
+      ansiedad = rowSums(across(all_of(diag_cols), ~ in_ansiedad(.))) > 0,
+      personalidad = rowSums(across(all_of(diag_cols), ~ in_personalidad(.))) > 0, 
+      lesiones= rowSums(across(all_of(diag_cols), ~in_lesiones(.)))> 0,
+      lesiones_amplio= rowSums(across(all_of(diag_cols), ~in_lesiones_amplio(.)))> 0
+    )
+}
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+first_episode_rec_c6<-
+agregar_columnas_icd(first_episode)
+  
+tot_cie10_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+  )|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+#         FALSE        TRUE
+# 1 4858 (80.5) 1180 (19.5)
+# 2 5612 (92.9)   426 (7.1)
+# 3 5645 (93.5)   393 (6.5)
+# 4 5652 (93.6)   386 (6.4)
+# 5 4215 (69.8) 1823 (30.2)
+# 6 5072 (84.0)  966 (16.0)
+# 7 4903 (81.2) 1135 (18.8)
+# 
+
+second_episode_rec_c6<-
+agregar_columnas_icd(second_episode)
+  
+tot_cie10_clas_2nd_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+  )|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+cat(paste0("Second episodes: ", 
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup() |> nrow()
+),"\n")
+
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-04-26: TSM 1 semestre")
+first_episode_1_trim_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_1_trim_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, MH: ", nrow(second_episode_1_trim_tsm_c6),"\n"))
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-03-01: TSM 1 semestre")
+first_episode_tsm_1_sem_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6522", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_tsm_1_sem_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6522", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First semester, MH: ", nrow(second_episode_tsm_1_sem_tsm_c6),"\n"))
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-03-01: Comorbilidad")
+first_episode_com_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6574", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_com_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6574", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, Comorbidity: ", nrow(second_episode_com_c6),"\n"))
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-04-26: TUS")
+first_episode_tus_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_tus_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, SUD: ", nrow(second_episode_tus_c6),"\n"))
+
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-04-26: TSM, 1 año, TSM")
+first_episode_tsm_1yr_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6268", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_tsm_1yr_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6268", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+cat(paste0("Second episodes, MH, 1 yr. later, MH: ", nrow(second_episode_tsm_1yr_tsm_c6),"\n"))
+
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-04-26: TSM, 1 año, otros")
+first_episode_tsm_1yr_otro_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6624", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_tsm_1yr_otro_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6624", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, MH, 1 yr. later, other causes: ", nrow(second_episode_tsm_1yr_otro_c6),"\n"))
+
+#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:
+
+first_episode_1_trim_tsm_rec_c6<-
+agregar_columnas_icd(first_episode_1_trim_tsm_c6)
+
+prim_trim_tsm_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_trim_tsm_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+#          FALSE        TRUE
+# 1  4802 (98.3)    83 (1.7)
+# 2  4587 (93.9)   298 (6.1)
+# 3  4543 (93.0)   342 (7.0)
+# 4  4554 (93.2)   331 (6.8)
+# 5  4535 (92.8)   350 (7.2)
+# 6  3160 (64.7) 1725 (35.3)
+# 7  3944 (80.7)  941 (19.3)
+# 8  3875 (79.3) 1010 (20.7)
+# 9  4687 (95.9)   198 (4.1)
+# 10 4661 (95.4)   224 (4.6)
+
+
+second_episode_1_trim_tsm_rec_c6<-
+agregar_columnas_icd(second_episode_1_trim_tsm_c6)
+
+second_trim_tsm_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:
+first_episode_tsm_1_sem_tsm_rec_c6<-
+agregar_columnas_icd(first_episode_tsm_1_sem_tsm_c6)
+
+prim_tsm_1_sem_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1_sem_tsm_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_tsm_1_sem_tsm_rec_c6<-
+agregar_columnas_icd(second_episode_tsm_1_sem_tsm_c6)#second_episode_tsm_1_sem_tsm_c6
+
+second_tsm_1_sem_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:
+
+first_episode_com_rec_c6<-
+agregar_columnas_icd(first_episode_com_c6)#first_episode_com_c6
+
+prim_com_1_trim_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_com_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_com_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_com_rec_c6<-
+agregar_columnas_icd(second_episode_com_c6)#second_episode_com_c6
+
+second_com_1_trim_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_com_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:
+
+first_episode_tus_rec_c6<-
+agregar_columnas_icd(first_episode_tus_c6)#first_episode_com_c6
+
+prim_trim_tus_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tus_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_tus_rec_c6<-
+agregar_columnas_icd(second_episode_tus_c6)#second_episode_tus_c6
+
+second_trim_tus_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tus_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:
+
+first_episode_tsm_1yr_tsm_rec_c6<-
+agregar_columnas_icd(first_episode_tsm_1yr_tsm_c6)
+
+prim_trim_tsm_1yr_tsm_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_tsm_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_tsm_1yr_tsm_rec_c6<-
+agregar_columnas_icd(second_episode_tsm_1yr_tsm_c6)
+
+second_trim_tsm_1yr_tsm_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_tsm_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:
+first_episode_tsm_1yr_otro_rec_c6<-
+agregar_columnas_icd(first_episode_tsm_1yr_otro_c6)
+
+prim_trim_tsm_1yr_other_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tsm_1yr_otro_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_tsm_1yr_otro_rec_c6<-
+agregar_columnas_icd(second_episode_tsm_1yr_otro_c6)
+
+second_trim_tsm_1yr_other_clas_c6<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1yr_otro_rec_c6$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#
+#
+rownames_vec_c6 <- c(
+  "Trastornos mentales orgánicos: F00.0-F09.9",
+  "Trastornos por uso de sustancias: F10.0-F19.9",
+  "Esquizofrenia: F20.0-F20.9",
+  "Otros trastornos psicóticos no afectivos: F21.0-F29.9",
+  "Trastornos bipolares: F30.0-F31.9",
+  "Trastornos depresivos y otros del estado de ánimo: F32.0-F39.9",
+  "Trastornos de ansiedad: F40.0-F49.9",
+  "Trastornos de la personalidad: F60.0-F69.9",
+  "Heridas autoinflingidas (info. intrahosp): X60-X84",
+  "Intoxicación/efectos tóxicos de químicos y sustancias: T36-T65"
+)
+
+# prim_trim_tsm_clas_c6 second_trim_tsm_clas_c6 prim_tsm_1_sem_clas_c6 second_tsm_1_sem_clas_c6 prim_com_1_trim_clas_c6 second_com_1_trim_clas_c6 prim_trim_tus_clas_c6 second_trim_tus_clas_c6 prim_trim_tsm_1yr_tsm_clas_c6 second_trim_tsm_1yr_tsm_clas_c6 prim_trim_tsm_1yr_other_clas_c6 second_trim_tsm_1yr_other_clas_c6
+
+cbind.data.frame(Total= tot_cie10_clas_c6[,2],
+                 Total_2nd= tot_cie10_clas_2nd_c6[,2],
+                 Prim_trim_tsm= prim_trim_tsm_clas_c6[,2],
+                 Prim_trim_tsm_2nd= second_trim_tsm_clas_c6[,2],
+                 Prim_trim_tus= prim_trim_tus_clas_c6[,2],
+                 Prim_trim_tus_2nd= second_trim_tus_clas_c6[,2],
+                 Prim_sem_tsm=  prim_tsm_1_sem_clas_c6[,2],
+                 Prim_sem_tsm_2nd=  second_tsm_1_sem_clas_c6[,2],
+                 Prim_trim_com= prim_com_1_trim_clas_c6[,2],
+                 Prim_trim_com_2nd= second_com_1_trim_clas_c6[,2],
+                 Prim_trim_tsm_1yr_tsm=  prim_trim_tsm_1yr_tsm_clas_c6[,2],
+                 Prim_trim_tsm_1yr_tsm_2nd= second_trim_tsm_1yr_tsm_clas_c6[,2],
+                 Prim_trim_tsm_1yr_otro= prim_trim_tsm_1yr_other_clas_c6[,2],
+                 Prim_trim_tsm_1yr_otro_2nd= second_trim_tsm_1yr_other_clas_c6[,2]
+           )|>
+    (\(df) {
+  rownames(df) <- rownames_vec_c6
+  rio::export(df,"_output/diagnostic_classification_cie10_c6.xlsx")
+  df
+      })() |> 
+  knitr::kable("markdown", caption= "Clasificación diagnóstica CIE-10")
+```
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+# first_episode_1_trim_tsm_c6<-
+#     df_filled2 |> 
+#     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om6))$run) |> 
+# first_episode_tsm_1_sem_tsm_c6<-
+#     df_filled2 |> 
+#     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6522", clus_pam_om6))$run) |> 
+# first_episode_com_c6<-
+#     df_filled2 |> 
+#     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6574", clus_pam_om6))$run) |>
+# first_episode_tus_c6<-
+#     df_filled2 |> 
+#     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om6))$run) |> 
+# first_episode_tsm_1yr_tsm_c6<-
+#     df_filled2 |> 
+#     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6268", clus_pam_om6))$run) |> 
+# first_episode_tsm_1yr_otro_c6<-
+#     df_filled2 |> 
+#     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6624", clus_pam_om6))$run) |> 
+
+episodes_1_trim_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_trim_tus_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_sem_tsm_c6<-
+df_filled2 |> 
+    dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6522", clus_pam_om6))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_sem_com_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6574", clus_pam_om6))$run) |>
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_tsm_1yr_tsm_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6268", clus_pam_om6))$run) |>
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_tsm_1yr_otr_c6<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6624", clus_pam_om6))$run) |>
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+rbind.data.frame(
+df_filled2 |> 
+  dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om6))$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om6))$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6522", clus_pam_om6))$run) |>
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6574", clus_pam_om6))$run) |>
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6268", clus_pam_om6))$run) |>
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, grepl("6624", clus_pam_om6))$run) |>
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75))
+)|>
+  (\(df) {
+ rownames(df) <- c("Total", "Q1, TSM", "Q1, TUS", "1Sem, TSM", "Q1, comorb", "Q1 TSM, 1yr TSM", "Q1 TSM, 1yr Otro"); df
+      })() |> 
+  select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+      (\(df) {
+  if (interactive()) {df|> rio::export("clipboard")}
+  knitr::kable(df, "markdown", caption="Días de hospitalización por cluster", digits=2)
+  })()
+
+
+rbind.data.frame(
+psych::describe(episodes_1_overall$n, quant=c(.25,.75)),
+psych::describe(episodes_1_trim_tsm_c6$n, quant=c(.25,.75)),
+psych::describe(episodes_1_trim_tus_c6$n, quant=c(.25,.75)),
+psych::describe(episodes_1_sem_tsm_c6$n, quant=c(.25,.75)),
+psych::describe(episodes_1_sem_com_c6$n, quant=c(.25,.75)),
+psych::describe(episodes_tsm_1yr_tsm_c6$n, quant=c(.25,.75)),
+psych::describe(episodes_tsm_1yr_otr_c6$n, quant=c(.25,.75))
+) |> 
+  (\(df) {
+ rownames(df) <- c("Total", "Q1, TSM", "Q1, TUS", "1Sem, TSM", "Q1, comorb", "Q1 TSM, 1yr TSM", "Q1 TSM, 1yr Otro"); df
+      })() |> 
+  select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+    (\(df) {
+  if (interactive()) {df|> rio::export("clipboard")}
+  knitr::kable(df, "markdown", caption="Número de episodios por cluster", digits=2)
+  })()
+```
 
 
 Luego vemos la clasificación de PPOO por cluster
@@ -939,7 +1640,13 @@ with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !r
 
 
 ```{r 12i-comp-cov-ppoo5}
-
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens|>
   dplyr::count(clus_pam_om6, factor_inclusivo_real_hist_mas_autperc_bin)|>
   dplyr::group_by(clus_pam_om6) |>
@@ -947,7 +1654,7 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens|>
   dplyr::select(-n) |>
   tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc_bin, values_from = n_prop, values_fill = "0")|> 
   (\(df) {
-        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|> select(3)|>t()|>  rio::export("clipboard")}
+        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|> dplyr::select(3)|>t()|>  rio::export("clipboard")}
         knitr::kable(df, "markdown", col.names=c("Conglomerados","No se identifica/no pertenece", "Hay reconocimeinto"), caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO")
       })()
 ```
@@ -976,7 +1683,7 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |>
   dplyr::summarise(mean=sprintf("%1.1f",mean(cens_time))), by="clus_pam_om6") |> 
   dplyr::select(-`0`)|> 
   (\(df) {
-        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|> select(2)|> t()|>  rio::export("clipboard")}
+        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|> dplyr::select(2)|> t()|>  rio::export("clipboard")}
         knitr::kable(df, "markdown", col.names=c("Conglomerado","Mortalidad observada", "Promedio"), caption="Post-hoc, conglomerado vs. Mortalidad y tiempo a censura")
       })()
 ```
@@ -1076,10 +1783,15 @@ pairwise.prop.test(t(tab_cl_mortalidad_pam_om6_q[,2:ncol(tab_cl_mortalidad_pam_o
 ```
 </div>
 
-No se constata una asociación entre la pertenencia a un conglomerado y mortalidad.
-
 
 ```{r 12l-comp-cov-mortalidad15}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
 # Cargar las librerías necesarias
 library(survival)
 library(ggplot2)
@@ -1151,7 +1863,7 @@ biostat3::survRate(Surv(time = death_time,
       scales::comma(tstop, big.mark = ".", decimal.mark = ",", accuracy = 1)
     )
   )|> 
-  select(clus_pam_om6, tasa_formateada)|> 
+  dplyr::select(clus_pam_om6, tasa_formateada)|> 
    (\(df) { rownames(df) <- NULL ; df  })()|>
   (\(df) {
         if (interactive()) { t(df) |> rio::export("clipboard") }
@@ -1249,7 +1961,7 @@ table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_
     dplyr::select(-Freq, -perc)|> 
     tidyr::pivot_wider(names_from="Var2",values_from="fp")|> 
   (\(df) {
-        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|>  select(c(1,3)) |> t()|>  rio::export("clipboard")}
+        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|>  dplyr::select(c(1,3)) |> t()|>  rio::export("clipboard")}
         knitr::kable(df, "markdown", caption="Frecuencias absolutas y relativas por fila", col.names= c("Conglomerados", "Fuera de RM", "En RM"))
       })()
 ```
@@ -1650,7 +2362,7 @@ dt_ing_calendar_quarter_t_desde_primera_adm_dedup |>
                      p25 = quantile(min_edad_anos, 0.25),
                      p75 = quantile(min_edad_anos, 0.75)) |>
     dplyr::mutate(sum= paste0(sprintf("%1.2f",mean_edad), " ± ", sprintf("%1.2f",sd), " ; ",p50," [",p25,", ",p75,"]"))|> 
-    select(clus_pam_om6, sum)|>
+    dplyr::select(clus_pam_om6, sum)|>
    (\(df) {
      if (interactive()) {mutate(df, across(-clus_pam_om6, ~gsub("\\.", ",", .)))|> rio::export("clipboard")}
      knitr::kable(df, caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2)
@@ -1679,7 +2391,7 @@ dt_ing_calendar_quarter_t_desde_primera_adm_dedup |>
   inner_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om6")],
              by = "run")|>
   dplyr::mutate(clus_pam_om6= str_wrap(clus_pam_om6, width = 20))|> 
-  group_by(clus_pam_om6)|> 
+  dplyr::group_by(clus_pam_om6)|> 
   dplyr::summarise(mean_edad = mean(min_edad_anos),
             sd_edad   = sd(min_edad_anos),
             n         = n())|> 
@@ -1770,10 +2482,10 @@ rstatix::games_howell_test(min_edad_anos ~ clus_pam_om6,
 
 
 cat("Descartando valores negativos en sil width")
-sens_min_anios_clus_pam_om7_q<-
-rstatix::games_howell_test(min_edad_anos ~ clus_pam_om7,data = dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
+sens_min_anios_clus_pam_om6_q<-
+rstatix::games_howell_test(min_edad_anos ~ clus_pam_om6,data = dt_ing_calendar_quarter_t_desde_primera_adm_dedup %>%
     dplyr::filter(quarter == 0) %>%
-    dplyr::inner_join(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus7_q)[,c("run","clus_pam_om7")], by="run")
+    dplyr::inner_join(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus6_q)[,c("run","clus_pam_om6")], by="run")
      )
 
 ```
@@ -1920,8 +2632,7 @@ tab_clus_compl_pam_om6_q|>
   })()
 ```
 
-A partir de la tabla de contingencia, se observa que 5939, Un semestre TSM(3)	y 5935, TSM, 6 meses después, TSM(2)
- presentan menores porcentajes de ingresos en establecimientos de Alta complejidad (~50%) y mayores en mediana complejidad (~27%). En contraste, pacientes clasificados en 5989, Comorbilidad un trimestre(4), 6025, Un trimestre, TUS(5) y 6036, TSM, 1 año después, otras causas(7)	se encuentran en mayor proporción en establecimientos de Alta complejidad.
+
 
 ```{r 12x-nivcomp-posthoc}
 #| message: true
@@ -2004,7 +2715,7 @@ pairwise_chisq_gof_test(tab_clus_compl_pam_om6_q[-1], p.adjust.method="holm")|>
 #| paged.print: true
 #| results: "hold"
 
-pairwise_chisq_gof_test(tab_clus_compl_pam_om7_q[-1], p.adjust.method="holm")|> 
+pairwise_chisq_gof_test(tab_clus_compl_pam_om6_q[-1], p.adjust.method="holm")|> 
     knitr::kable("markdown", caption="Dependencia categórica sol. 7 conglomerados, por pares de categorías en Niv. Complejidad (corrección Holm-Bonferroni)")
 ```
 </div>

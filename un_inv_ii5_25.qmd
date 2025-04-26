@@ -955,7 +955,7 @@ df_filled2 |>
     dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6522, Un semestre TSM(1)")$run) |> 
     dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
     dplyr::group_by(run) |>
-    dplyr::filter(row_number() != 1) |> 
+    #dplyr::filter(row_number() != 1) |> 
     summarise(n=n()) |> pull(n) |> summary()
 
 cat("Número de ususarios que tienen más de un episodio en este grupo")
@@ -1083,6 +1083,17 @@ in_personalidad <- Vectorize(function(codigo) {
   grepl("^F6[0-9]", codigo)
 })
 
+# LESIONES AUTOINFLIGIDAS INTENCIONALMENTE (X60-X84)
+in_lesiones <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^X6[0-9]|^X7[0-9]|^X8[0-4]", codigo)
+})
+
+#Mortier, P., Conde, S., Alayo, I., Amigo, F., Ballester, L., Amell, R. C., Guinart, D., Contaldo, S. F., Ferrer, M., Leis, A., Mayer, M. A., Portillo-Van Diest, A., Puértolas-Gracia, B., Ramírez-Anguita, J. M., Peña-Salazar, C., Sanz, F., Kessler, R. C., Palao, D., Sola, V. P., . . .  Alonso, J. (2024). Premature Death, Suicide, and Nonlethal Intentional Self-Harm After Psychiatric Discharge. JAMA Network Open, 7(6), e2417131. https://doi.org/10.1001/jamanetworkopen.2024.17131
+in_lesiones_amplio <- Vectorize(function(codigo) {
+  if (is.na(codigo)) return(FALSE)
+  grepl("^(T3[6-9]|T4[0-9]|T5[0-9]|T6[0-5])", codigo)
+})
 
 agregar_columnas_icd <- function(df) {
   # Especificamos las columnas de diagnóstico
@@ -1114,6 +1125,16 @@ df_filled2 |>
     dplyr::filter(row_number() == 1)|>
     dplyr::ungroup()
 
+second_episode<-
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run)|> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, total: ", nrow(second_episode)))
+
 first_episode_rec<-
 agregar_columnas_icd(first_episode)
   
@@ -1138,6 +1159,24 @@ rbind.data.frame(
 # 5 4215 (69.8) 1823 (30.2)
 # 6 5072 (84.0)  966 (16.0)
 # 7 4903 (81.2) 1135 (18.8)
+# 
+
+second_episode_rec<-
+agregar_columnas_icd(second_episode)
+  
+tot_cie10_clas_2nd<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec$personalidad, levels = c(FALSE, TRUE))))                 )|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
 
 cat("2025-03-01: TSM 1 semestre")
 first_episode_1_trim_tsm<-
@@ -1147,6 +1186,15 @@ df_filled2 |>
     dplyr::group_by(run) |>
     dplyr::filter(row_number() == 1)|>
     dplyr::ungroup()
+second_episode_1_trim_tsm<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6623, Un trimestre, TSM(4)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, MH: ", nrow(second_episode_1_trim_tsm)))
 
 cat("2025-03-01: TSM 2 trimestres")
 first_episode_tsm_1_sem_tsm<-
@@ -1156,6 +1204,16 @@ df_filled2 |>
     dplyr::group_by(run) |>
     dplyr::filter(row_number() == 1)|>
     dplyr::ungroup()
+second_episode_tsm_1_sem_tsm<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6522, Un semestre TSM(1)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First semester, MH: ", nrow(second_episode_tsm_1_sem_tsm)))
+
 
 cat("2025-03-01: Comorbilidad")
 first_episode_com<-
@@ -1165,6 +1223,16 @@ df_filled2 |>
     dplyr::group_by(run) |>
     dplyr::filter(row_number() == 1)|>
     dplyr::ungroup()
+second_episode_com<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6574, Comorbilidad un trimestre(2)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, Comorbidity: ", nrow(second_episode_com)))
+
 
 cat("2025-03-01: TUS")
 first_episode_tus<-
@@ -1174,6 +1242,14 @@ df_filled2 |>
     dplyr::group_by(run) |>
     dplyr::filter(row_number() == 1)|>
     dplyr::ungroup()
+second_episode_tus<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6612, Un trimestre, TUS(3)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+cat(paste0("Second episodes, First quarter, SUD: ", nrow(second_episode_tus)))
 
 
 first_episode_1_trim_tsm_rec<-
@@ -1202,6 +1278,25 @@ rbind.data.frame(
 # 6 3892 (81.3)  896 (18.7)
 # 7 3785 (79.1) 1003 (20.9)
 
+second_episode_1_trim_tsm_rec<-
+agregar_columnas_icd(second_episode_1_trim_tsm)
+
+second_trim_tsm_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_trim_tsm_rec$personalidad, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+
 first_episode_tsm_1_sem_tsm_rec<-
 agregar_columnas_icd(first_episode_tsm_1_sem_tsm)
 
@@ -1227,6 +1322,26 @@ rbind.data.frame(
 # 5 241 (68.1) 113 (31.9)
 # 6 299 (84.5)  55 (15.5)
 # 7 288 (81.4)  66 (18.6)
+# 
+#
+second_episode_tsm_1_sem_tsm_rec<-
+agregar_columnas_icd(second_episode_tsm_1_sem_tsm)
+
+second_sem_tsm_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tsm_1_sem_tsm_rec$personalidad, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
 
 first_episode_com_rec<-
     agregar_columnas_icd(first_episode_com)
@@ -1255,10 +1370,28 @@ rbind.data.frame(
 # 7 146 (68.9)  66 (31.1)
 
 
+second_episode_com_rec<-
+    agregar_columnas_icd(second_episode_com)
+
+second_trim_com_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_com_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_com_rec$personalidad, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+
+
 first_episode_tus_rec<-
     agregar_columnas_icd(first_episode_tus)
-
-  format_table_vec(table(factor(first_episode_rec$personalidad, levels = c(FALSE, TRUE))))
 
 prim_trim_tus_clas<-
 rbind.data.frame(
@@ -1282,6 +1415,25 @@ rbind.data.frame(
 # 5 684 (100)  684 (0.0)
 # 6 684 (100)  684 (0.0)
 # 7 684 (100)  684 (0.0)
+
+
+second_episode_tus_rec<-
+    agregar_columnas_icd(second_episode_tus)
+
+second_trim_tus_clas<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tus_rec$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec$personalidad, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
 
 # chisq_test(
 # cbind(
@@ -1318,7 +1470,147 @@ rbind.data.frame(
 # ))
 
 # 6035. Un trimestre. TSM(4) (n=4.788)		6025. Un trimestre. TUS(3) (n=684)		5939. Un semestre TSM(1) (n=354)		5989. Comorbilidad un trimestre(2) (n=212)	
-# 
+
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#
+todes_suicidio<-
+first_episode |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_1_trim_tsm<-
+first_episode_1_trim_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_1_trim_tus<-
+first_episode_tus |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_1_sem_tsm<-
+first_episode_tsm_1_sem_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_com<-
+first_episode_com |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+
+todes_suicidio_amplio<-
+first_episode |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_1_trim_tsm_amplio<-
+first_episode_1_trim_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_1_trim_tus_amplio<-
+first_episode_tus |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_1_sem_tsm_amplio<-
+first_episode_tsm_1_sem_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_com_amplio<-
+first_episode_com |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+
+todes_suicidio_2nd<-
+second_episode |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_1_trim_tsm_2nd<-
+second_episode_1_trim_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_1_trim_tus_2nd<-
+second_episode_tus |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_1_sem_tsm_2nd<-
+second_episode_tsm_1_sem_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+suicidio_com_2nd<-
+second_episode_com |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones(.))) > 0 )
+
+todes_suicidio_amplio_2nd<-
+second_episode |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_1_trim_tsm_amplio_2nd<-
+second_episode_1_trim_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_1_trim_tus_amplio_2nd<-
+second_episode_tus |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_1_sem_tsm_amplio_2nd<-
+second_episode_tsm_1_sem_tsm |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+suicidio_com_amplio_2nd<-
+second_episode_com |>
+    mutate( lesiones= rowSums(across(all_of(paste0("diag", 1:11)), ~ in_lesiones_amplio(.))) > 0 )
+
+#_#_#_#_#_#_#_#_#_#_#_
+cbind.data.frame(
+  cluster= c("Total", "First quarter, MH", "First quarter, SUD", "First semester, MH", "First quarter, comorbidity"),
+rbind.data.frame(
+format_table_vec(table(factor(todes_suicidio$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tsm$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tus$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_sem_tsm$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_com$lesiones, levels = c(FALSE, TRUE))))
+)
+)|>
+    (\(df) {
+  colnames(df) <- c("cluster", "FALSE", "TRUE"); df
+      })() |> rio::export("_output/intrahosp_int_self_harm_by_cluster.xlsx")
+
+#https://pmc.ncbi.nlm.nih.gov/articles/PMC11208976/
+##poisoning and toxic effects of drugs and chemicals T36-T65
+#adopted to categorize all types of poisonings (T36-T65).
+#https://doi.org/10.1002/hsr2.587
+cbind.data.frame(
+  cluster= c("Total", "First quarter, MH", "First quarter, SUD", "First semester, MH", "First quarter, comorbidity"),
+rbind.data.frame(
+format_table_vec(table(factor(todes_suicidio_amplio$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tsm_amplio$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tus_amplio$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_sem_tsm_amplio$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_com_amplio$lesiones, levels = c(FALSE, TRUE))))
+)
+)|>
+    (\(df) {
+  colnames(df) <- c("cluster", "FALSE", "TRUE"); df
+      })() |> rio::export("_output/intrahosp_poisonings_by_cluster.xlsx")
+
+
+cbind.data.frame(
+  cluster= c("Total", "First quarter, MH", "First quarter, SUD", "First semester, MH", "First quarter, comorbidity"),
+rbind.data.frame(
+format_table_vec(table(factor(todes_suicidio_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tsm_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tus_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_sem_tsm_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_com_2nd$lesiones, levels = c(FALSE, TRUE))))
+)
+)|>
+    (\(df) {
+  colnames(df) <- c("cluster", "FALSE", "TRUE"); df
+      })() |> rio::export("_output/intrahosp_int_self_harm_by_cluster_2nd_ep.xlsx")
+
+#https://pmc.ncbi.nlm.nih.gov/articles/PMC11208976/
+##poisoning and toxic effects of drugs and chemicals T36-T65
+#adopted to categorize all types of poisonings (T36-T65).
+#https://doi.org/10.1002/hsr2.587
+cbind.data.frame(
+  cluster= c("Total", "First quarter, MH", "First quarter, SUD", "First semester, MH", "First quarter, comorbidity"),
+rbind.data.frame(
+format_table_vec(table(factor(todes_suicidio_amplio_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tsm_amplio_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_trim_tus_amplio_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_1_sem_tsm_amplio_2nd$lesiones, levels = c(FALSE, TRUE)))),
+format_table_vec(table(factor(suicidio_com_amplio_2nd$lesiones, levels = c(FALSE, TRUE))))
+)
+)|>
+    (\(df) {
+  colnames(df) <- c("cluster", "FALSE", "TRUE"); df
+      })() |> rio::export("_output/intrahosp_poisonings_by_cluster_2nd_ep.xlsx")
+
+
+
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#
+#
 rownames_vec <- c(
   "Trastornos mentales orgánicos: F00.0-F09.9",
   "Trastornos por uso de sustancias: F10.0-F19.9",
@@ -1329,6 +1621,18 @@ rownames_vec <- c(
   "Trastornos de ansiedad: F40.0-F49.9",
   "Trastornos de la personalidad: F60.0-F69.9"
 )
+
+cbind.data.frame(Total= tot_cie10_clas_2nd[,2],
+                 Prim_trim_tsm= second_trim_tsm_clas[,2],
+                 Prim_trim_tus= second_trim_tus_clas[,2],
+                 Prim_sem_tsm=  second_sem_tsm_clas[,2],
+                 Prim_trim_com= second_trim_com_clas[,2]
+                 )|>
+    (\(df) {
+  rownames(df) <- rownames_vec; df
+      })() |> 
+  rio::export("_output/diagnostic_classification_cie10_following_treatment.xlsx")
+  #knitr::kable("markdown", caption= "Clasificación diagnóstica CIE-10")
 
 cbind.data.frame(Total= tot_cie10_clas[,2],
                  Prim_trim_tsm= prim_trim_tsm_clas[,2],
@@ -1342,6 +1646,91 @@ cbind.data.frame(Total= tot_cie10_clas[,2],
   knitr::kable("markdown", caption= "Clasificación diagnóstica CIE-10")
 ```
 
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+episodes_1_overall<-
+df_filled2 |> 
+  dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_trim_tsm<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6623, Un trimestre, TSM(4)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_trim_tus<-
+df_filled2 |> 
+dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6612, Un trimestre, TUS(3)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_sem_tsm<-
+df_filled2 |> 
+    dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6522, Un semestre TSM(1)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_sem_com<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6574, Comorbilidad un trimestre(2)")$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+
+rbind.data.frame(
+df_filled2 |> 
+  dplyr::filter(run %in% ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6623, Un trimestre, TSM(4)")$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6612, Un trimestre, TUS(3)")$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6522, Un semestre TSM(1)")$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+dplyr::filter(run %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, clus_pam_om4=="6574, Comorbilidad un trimestre(2)")$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75))
+)|>
+  (\(df) {
+ rownames(df) <- c("Total", "Un trimestre, TSM", "Un trimestre, TUS", "Un semestre, TSM", "Comorbilidad, un trimestre"); df
+      })() |> 
+  select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+  knitr::kable("markdown", caption="Días de hospitalización por cluster", digits=2)
+
+rbind.data.frame(
+psych::describe(episodes_1_overall$n, quant=c(.25,.75)),
+psych::describe(episodes_1_trim_tsm$n, quant=c(.25,.75)),
+psych::describe(episodes_1_trim_tus$n, quant=c(.25,.75)),
+psych::describe(episodes_1_sem_tsm$n, quant=c(.25,.75)),
+psych::describe(episodes_1_sem_com$n, quant=c(.25,.75))
+) |> 
+  (\(df) {
+ rownames(df) <- c("Total", "Un trimestre, TSM", "Un trimestre, TUS", "Un semestre, TSM", "Comorbilidad, un trimestre"); df
+      })() |> 
+  select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+  knitr::kable("markdown", caption="Número de episodios por cluster", digits=2)
+```
 
 
 Luego vemos la clasificación de PPOO por cluster
@@ -1354,13 +1743,67 @@ Luego vemos la clasificación de PPOO por cluster
 #| eval: true
 #| paged.print: true
 
+
+filtered_df_csv <- readr::read_csv("filtered_df.csv", col_types = readr::cols(...1 = readr::col_skip()))
+colnames(filtered_df_csv)<- c("rn", "run")
+nrow(filtered_df_csv)
+#[1] 1687190
+invisible("Quienes tienen un registro RSH o en el histórico una autoidentificación por MINSAL")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010 <- 
+ifelse(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run %in%  filtered_df_csv$run,1,0)
+rm(filtered_df_csv)
+
+ci_cya_conadi<-readr::read_csv("cya_conadi_o_ci_conadi.csv")
+nrow(ci_cya_conadi)
+#[1] 1037607
+
+cat("Quienes tienen al menos uno?\n")
+filtered_df_csv |> 
+  tidytable::inner_join(ci_cya_conadi, by=c("run"="RUN"), multiple="first") |> 
+  nrow()
+#[1] 800271
+scales::percent(800271/9646325, accuracy=.1)
+
+cat("Sólo CONADI\n")
+filtered_df_csv |> 
+  tidytable::right_join(ci_cya_conadi, by=c("run"="RUN"), multiple="first") |> 
+  filter(is.na(rn)) |> 
+  nrow()
+#[1] 237336
+scales::percent(237336/9646325, accuracy=.1)
+
+
+cat("Sólo RSH o autodentificación histórico\n")
+filtered_df_csv |> 
+  tidytable::left_join(ci_cya_conadi, by=c("run"="RUN"), multiple="first") |> 
+  filter(!is.na(rn)) |> 
+  nrow()
+#[1] 2129654
+scales::percent(2129654/9646325, accuracy=.1)
+
+invisible("SI tiene un registro CONADI CyA o CI, entonces es 1")
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi <- 
+ifelse(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$run %in%  ci_cya_conadi$RUN,1,0)
+
+cat("Tabla de interesección entre pueblos originarios y CONADI, histórico (2005-)\n")
+table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010,
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi)
+#      0    1
+# 0 5310  137
+# 1  754  425
+rm(ci_cya_conadi)
+
+cat("Proporción")
+0.08481739
+
+cat("ASociación con pertenencia a conglomerados, nueva agrupación\n")
 janitor::chisq.test(df_filled2[,c("run","glosa_pueblo_originario")] |> 
         dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4")], by="run", multiple="first") |> 
         janitor::tabyl(glosa_pueblo_originario, clus_pam_om4))
 # X-squared = 128.12, df = 24, p-value = 3.399e-16
 #
 #
-cat("Restringiendo el análisis a quienes reportan MINSAL Rapa Nui, Mapuche y Ninguno") 
+cat("Restringiendo el análisis a quienes reportan MINSAL Rapa Nui, Mapuche y Ninguno\n") 
 
 df_filled2[, c("run", "glosa_pueblo_originario")] |>
   dplyr::left_join(
@@ -1400,20 +1843,41 @@ seqCompare(States_Wide.seq_quarter_t_prim_adm, group=ing_dt_ing_calendar_quarter
 # [1,] 3.214252 0.09793892   0.21852           1.456759                    1.115452
 # 
 
-
-glosa_pueblo_originario_rec<-
-   df_filled2[,c("run","glosa_pueblo_originario")] |> 
-  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","factor_inclusivo_real_hist_mas_autperc")], by="run", multiple="first") |> 
-  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario=="NINGUNO" & factor_inclusivo_real_hist_mas_autperc!="00"~ "DESCONOCIDO", glosa_pueblo_originario=="NINGUNO"~"NINGUNO", grepl("RAPA|MAPU", glosa_pueblo_originario)~"RAPA NUI o MAPUCHE", T~"RESTO")) |> 
-   mutate(
+glosa_pueblo_originario_rec <- 
+  df_filled2[, c("run", "glosa_pueblo_originario")] |> 
+  left_join(
+    ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4", "ppoo_minsal_y_rsh_2010", "ci_cya_conadi")],
+    by = "run",
+    multiple = "first"
+  ) |> 
+  mutate(
+    glosa_pueblo_originario_rec = case_when(
+      glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO",
+      glosa_pueblo_originario == "NINGUNO" ~ "NINGUNO",
+      grepl("RAPA|MAPU", glosa_pueblo_originario) ~ "RAPA NUI o MAPUCHE",
+      TRUE ~ "RESTO"
+    ),
     pueblo_bin = case_when(
       glosa_pueblo_originario_rec == "RAPA NUI o MAPUCHE" ~ "Mapuche o Rapa Nui",
       glosa_pueblo_originario_rec %in% c("DESCONOCIDO", "NINGUNO", "RESTO") ~ "Otro o ninguno"
     )
-  ) |> pull(pueblo_bin)
+  ) |> 
+  group_by(run) |> 
+  summarise(
+    sum_ppoo = sum(grepl("Mapuche o Rapa Nui", pueblo_bin)),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    sum_bin_ppo = ifelse(sum_ppoo > 0, 1, 0)
+  ) |> 
+  pull(sum_bin_ppo)
+
+glosa_pueblo_originario_rec_num<-as.numeric(factor(glosa_pueblo_originario_rec))-1
 
 seqcompare_ppoo_quarter_om_ppoo_rec<-
-seqCompare(States_Wide.seq_quarter_t_prim_adm, group=glosa_pueblo_originario_rec, method="OM", sm=costmatrix_quarter, seed= 2125, s=1e1, stat="all")
+TraMineRextras::seqCompare(States_Wide.seq_quarter_t_prim_adm, group=glosa_pueblo_originario_rec_num, method="OM", sm=costmatrix_quarter, seed= 2125, s=1e1, stat="all")# s= Integer. Default 100. The size of random samples of sequences. When 0, no sampling is done.
+
+
  
 ```
 
@@ -1435,11 +1899,289 @@ Generamos un gráfico de PPOO por cada conglomerado.
 
 ppoo_clus_pre_pam_om4_q<-
   df_filled2[,c("run","glosa_pueblo_originario")] |> 
-  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","factor_inclusivo_real_hist_mas_autperc")], by="run", multiple="first") |> 
-  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario=="NINGUNO" & factor_inclusivo_real_hist_mas_autperc!="00"~ "DESCONOCIDO", T~glosa_pueblo_originario)) |> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first") |> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario)) |> 
   janitor::tabyl(glosa_pueblo_originario_rec, clus_pam_om4) |> 
   janitor::adorn_percentages("row")
 
+invisible("2025-04-13")
+cat("Sólo RAPA NUI y MAPUCHE (ver por RUN, al menos una observación que se identifique RAPA NUI o MAPUCHE)\n")
+ppoo_clus_pre_pam_om4_q_act<-
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run")|> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario)) |> 
+  group_by(run, clus_pam_om4)|>
+  summarise(sum_ppoo= sum(grepl("RAPA|MAPU", glosa_pueblo_originario_rec)), .groups="drop")|>
+  ungroup()|> 
+  mutate(sum_bin_ppo= ifelse(sum_ppoo>0, 1, 0))|>
+  janitor::tabyl(sum_bin_ppo, clus_pam_om4)
+janitor::chisq.test((ppoo_clus_pre_pam_om4_q_act))
+#X-squared = 6.2657, df = 3, p-value = 0.09938
+
+cat("Sólo RAPA NUI (ver por RUN, al menos una observación que se identifique RAPA NUI)\n")
+ppoo_clus_pre_pam_om4_q_rapa<-
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run")|> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario))|> 
+  group_by(run, clus_pam_om4)|>
+  summarise(sum_ppoo= sum(grepl("RAPA", glosa_pueblo_originario_rec)), .groups="drop")|>
+  ungroup()|> 
+  mutate(sum_bin_ppo= ifelse(sum_ppoo>0, 1, 0))|>
+  janitor::tabyl(sum_bin_ppo, clus_pam_om4)
+
+janitor::fisher.test((ppoo_clus_pre_pam_om4_q_rapa))
+#p-value = 0.009065
+cat("son 12 casos!\n")
+
+ppoo_clus_pre_pam_om4_q_clasificaciones<-
+df_filled2[, c("run", "glosa_pueblo_originario")] |>
+  left_join(
+    ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4","ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], 
+    by = "run"
+  ) |>
+  mutate(glosa_pueblo_originario_rec = if_else(
+    glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO",
+    glosa_pueblo_originario
+  )) |>
+  group_by(run, clus_pam_om4) |>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om4, show_na = T)
+
+janitor::adorn_percentages(ppoo_clus_pre_pam_om4_q_clasificaciones, "col")|> 
+    mutate_if(is.numeric, ~round(.*100, 1)) |> mutate(clas_por_run= factor(clas_por_run, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche")))|> 
+  arrange(clas_por_run)|>
+  (\(df) {
+  if (interactive()) {df|> rio::export("clipboard")}
+  knitr::kable(df, caption="Porcentajes por columna, conglomerado vs. PPOO")
+  })()
+
+janitor::fisher.test(ppoo_clus_pre_pam_om4_q_clasificaciones, simulate.p.value=T, B=1e5)
+#p-value = 0.01
+
+
+chisq.posthoc.test(ppoo_clus_pre_pam_om4_q_clasificaciones[,2:5],simulate.p.value=T, B=1e5)|> 
+  (\(df) { dplyr::mutate_at(df, 3:ncol(df), ~ round(as.numeric(gsub("\\*", "", .)), 3))
+  })()|>
+  group_by(Dimension)|>
+  (\(df) { summarise(df, across(2:(ncol(df)-1), ~ paste0(first(sprintf("%1.2f", .)), " (p=", last(sprintf("%1.3f", .)), ")")))
+  })()|>
+  (\(df) { dplyr::mutate_at(df, 2:length(names(df)), ~ gsub("p\\=0.000)", "p<0.001)", .))
+  })()|>
+  mutate(Dimension= ppoo_clus_pre_pam_om4_q_clasificaciones[,1]) |> 
+  mutate(Dimension= factor(Dimension, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche"))) |> 
+  arrange(Dimension) |>
+  mutate(Dimension= as.character(Dimension)) |> 
+  knitr::kable("markdown", caption = "Comparación post-hoc, conglomerado-PPOO autorreporte")
+
+cat("Tampoco resulta significativo en https://adaptivedesignstrial.shinyapps.io/posthoc/\n")
+
+
+neg_sil_width<- c("020ecfb87667825f8c2ca2273fec57a50789c95ca28374e473057a01a54abcf0", "03f170dac90813987aad559e4d6597e5d751111a5e143a4b4c7b2614bd63fa6a", "0b1ff2a5c8ec1a6e4aa32187670f38943bf7f7dfeedbf496173d60f4fef580f0", "0c2cd69046da92051635be4c1f2fe5364e4bcc8297a675e1a3b0a599fe28f6e1", 
+"1075291d2c731cc89eb044ed92de863d291246e4c41972573fd552d941af53e9", 
+"11162ea02d506bc1b91d8fd95447721054ff78437763db0a31ab461c992dd735", 
+"172cdb27864fbfde67915a288d1c84024603f40a2133c0681d5adb9c87462616", 
+"19e5ed0633d9dd89c82f5bd8f1ecc7f5079609760a9d4c3b3a829aa2b2c9d856", 
+"1c4cbc882476901ab8bf59c3ecf3eb181b1996da9a325be05116d9a459bc79b1", 
+"1c7aa780a03a99c1222b77d519a0b12625f821a0fb8d95caf5f58b555ff75e9f", 
+"1dbdb6ef97104f31ecdcaa9d9048fe2b5442f5504ab0d047c9359e0a650ced1d", 
+"1e249a0778e2b57f5c2d63cd493e174745aad47966e9b498829bb1b3df69d33f", 
+"1f4ac6e6ce2f0ce1b867e308cc3dcda821b1eee6c6c14335e2006d9a3318e25a", 
+"1fc36751012ff26d8253fe8f05962779280ba9cfb3e767f0288007ab563d9118", 
+"216e8ff4324aab768dcbf8161d78619ee5c54686259b922a26aec69b948e695e", 
+"220d4b6ce95f6736e1aa75326e40128abd3bccbabee97a642dd30bccb9eb5023", 
+"227db9a09dc4cb4925cfc33660251847b72180ec6eca8bb855dfdbce9b11daf1", 
+"24026cea649eb63322019a011427de57dbf64bfc8b6b880ab3071297ac882f39", 
+"271a95ec7ccbe6966089f7851cc7041f1b2ee8021b8e3261cce981bf64de329a", 
+"2a11c1669370064be8f41ac60334f3a559aadaac871b15b4fcbe0ce7d9242306", 
+"2b732d5a24ecdc09f8aa8b8daf51d9f58d3d528ea44b701cb620287513dc1261", 
+"2c78585d5e62628802671abeb3ddc41ffda691fe2fe7fb459685be67de899864", 
+"2c8ec64b3c6ab90efa37297b6ea50abab1b33944b7291e58165357084ceba3c4", 
+"3172a1274529f7e88293faf08d7ac5ec54c6268a94a6a71114217c6f73a6d8ef", 
+"3388b29d297eb59bb409ba7b6e9c006f7f099ee724e7fa38cff9bb1d520906ab", 
+"35c543f49f2b69898871d8c039fc790d98a2fc54380cee1afab1f7c7d525cb67", 
+"371ac171d1a36e5657cf76d27d897d7db2c5eebc54f922d962a001ccfd13a6f9", 
+"3afb543ec0fc5046f39441a37a97a7df7b93fdeaa35d25095f0ad415bdc45c0d", 
+"3d8a5ff9226706a7e8de03745582bd578e9d777a5f57f920e3a688f41a50bef9", 
+"3e06416db73cfb10effdb914a749091d1e2a65629f38fbbc4532710cebcca77d", 
+"3f1e7584408d6ee4a1ff810efbb8708d2f2be1ddaa467f36ba202e597453b1d0", 
+"3f5be0a18bd23db42f6859c7421701b7257450730bc1636cb22ed10cc6393618", 
+"417434ff805f8c44cb5e12621f60e35d33189d3ebbf98903a3d2c031abda6f4e", 
+"42e38c995fac0b4f1c42f7609ddedadf7b048a402cac0de4e43aa91ce684bf40", 
+"43b4ce7106602a347270f942ac233f246e30556d4ccce307c08da440e48224d5", 
+"45acd64b3e874e68334d01dc189ca0e43bcae466edfeb68d2cf588fb1a6d88d1", 
+"45b18e2462d5295d0aec2fe4c6fbfda9d3ab27eff26feff396a61583e90d98ca", 
+"478f0501656873cb8db4ee1494178e872867c376e5f738ecae9f4346f60c55cb", 
+"4882801f8b7cee71c0b95c7cdd88524317cd0c317e0cb58fdc825973654ffd2d", 
+"48cb07721dd4dbed3e6d59899773435710cb82aa385f6b50229c4b49706ed36e", 
+"4aea5e1a635c93fecd533e54094a2816035b06880f613a8d7b58087654a05654", 
+"4b02cd756cb9c2cd54a1ce16f08af06b652188d108cf3e4b8de2b6bbc640a640", 
+"50a981e4c68fffe61ef85afdfc9caa9ed334e054eeb1ac0b0abc9f64e26286e8", 
+"511a7e2b5d8a98febc1788bef888fa1e802451137e6aece06bc0f1c521122333", 
+"51c85b64a4f425a94f4bc01cbb88e5ef00885ded42febb61c2ee46a1847598bd", 
+"5251fa85e010ccaa04cbe0b486b6831a039819519004f2cba36cc5eb0fbd504e", 
+"5a7da92a90ea18a147b3917dff6e7cb6044970ca372382104769d432235c6bc4", 
+"5b6b1a027a12aa5dfc4865dc4c3cc73dfd298ebfe29865f7d68a83d4c4cef075", 
+"5cbe163a4e62a98d82a35129cc30c8f37a0fa1542587a880a7a7759ed8228309", 
+"6214c3a3c12a86ba71cf347765257a255b1bbef34322713e66d403775ad600d7", 
+"62417fd6a719c8ab4abe7da3f7273c7df3b33df38b5442220117e9dccfe997db", 
+"63f098f41f2618fe82009a5aaf2729b21414e3262c32a63c531f2a74513f3eaa", 
+"64f85f102b1b48d5802874f6b24ff3094f8845f061966a33f4be920f1737c019", 
+"66d9d910c5c909b36cb0ae7fe5be5e35465733281c0654de3b6d543395dc0d51", 
+"689ac87a0f71e0121efce359fea86dc326dd83b5541ef72a5f037bc343a5afc9", 
+"69c4e81e3d883c15aed48c10f75483f9d77b769154c7131bcda53ae7ec8f83c5", 
+"6a1bf4562be977b90b61f3d227150cc4318ff6867e2aa6b7e3e56cc12fa980f2", 
+"6c5c40557de8bf048645f341704591d069759ba2888209c05c06a7f5d1154f65", 
+"6ce14e5d3aad1ad104ad392a6b433674349f9490aefafe6fc53cd21c57ddcbc4", 
+"71be067f52d984813d7f34aa8a335e82725f7f132a0976e87790aa6286b34f50", 
+"753743e9cdcfdc6583f1a2fe537e3ae886827e6aabf8231976544477a92153f1", 
+"75400455db911006ae631da57b0c40acadc219352e35e8cb1b62e86469e24d69", 
+"7568556ce276ca6018af6159618cdb0c0c00051a8d6c49e0bd580ff0a40cd48e", 
+"76b24534fa10468c20cee7ae77557ddfd6e658bbdae310e8bb6397461d5cec90", 
+"7751acaa52c7ec8bfecce109c89dd0c13c275230d091085520892882fb998855", 
+"7a555e3a9358d121da82c734e94f281e2333a69d4bb5cc2be8f0f58449c1d72d", 
+"7c1af816759cbd3a63dd90472cea923b2bb510489002927b0ee90d2a13884382", 
+"815e814acf129e1f8c75b94ee20ea8d63e83a20918ad471c6cdb35d1f3f3ed16", 
+"82b18190df1a84ba755f898bd2246305f9ace41d6cb0bd3b780090b903f3dd31", 
+"83d33cca6c417496f198ee29fc4e3b97db1563797b2b71828a4c388bdcb0acb2", 
+"855e1ea9dfa58bb958b8c5d8a11306dc2ae15348fecea7654a18cbd0b27bdcff", 
+"87d7871b1205ae513c858cf4c18d97b57be5594cc9194b8c3197739941ee2992", 
+"8845e5c711b24d7af54ef4684225cbc739f9c4fb7674c8688a5279a42f0f71bc", 
+"8aabbf007157a2a2bb2188316569361ae6604811996d6c3ba4ddef2ff295f439", 
+"8fa5a24fed601395d6bd103a3dcf55d662c5c2f7193f22aed6bf52e352222cbf", 
+"902d776b5dffc2d361ea537a5466c80a7b12e46531e0bc3ac78567185061a920", 
+"909ab824b3e52a50ec9143933feb379157651e7df0d181bbc50b975c12f7d12e", 
+"91868b47d78b8e8992b64686b64b60f578017ce71d6c169ee41900af8c33f482", 
+"923c86125fe398217325254e9784f917a2c46b99ccae372fb5a954072069d3a7", 
+"94014e288cdd4ec2d9355a9c4e5815b73da692ea8853bb1dc4b5194c49caf96d", 
+"94bcedbf2f02f5d1dd392c891b8a30d76254198526af987597dc29cb571a3a45", 
+"9524b1e9764ed7f79ed4ba5d7d88035d46716baa1acee79aa79cd044f6fe9db9", 
+"96532d98714949a7940350524df68d9a90d2a4fa0a3b6f11f003f8cd89f8f526", 
+"98142d43d5a6da0d4e74c8f401aa4bec6c15a6247572032189f292fd92b70b2b", 
+"9b5b1fdc78ef1ba5a24ed6ba38f27573aa98b48f21865f3a3c72a09ad1540e6e", 
+"9d5ba8dca2b62e8ade5ecaa75178d2ccba815f04a810e83e9f10deb82a27dd66", 
+"9d8a06d4f6b5c628f07a862fb25b35c62a2cbaaa631def3e0ce50b1a483d8a91", 
+"9f65df12801f4eafeaa51cf33beeef9dfcbc28f5c526726a71e1233053843461", 
+"a131725ce6d5436eb2226b1f7ab9e65386cad9e6ddf9097a4add0baa37937568", 
+"a387013e998b1fb44a3147dc5d45038c76c3605a32e23bc48ef3f533ba7c01d0", 
+"a534e423c77776a0f9f65b3137b62e2d8ca5fc3362e41265a6b128979e9230d4", 
+"a57abb6ecfbc785de04acef89a8c8bf8ddc2a1821901eef027898ea07338afed", 
+"a663b3eb70c7ac37f38eb44be53f2e21bcce475e13bffab4a07d587994caf512", 
+"a679b98ea92e727c2ba3485198ff11bb77f9db1fb7cd5d11c5045db9766ea228", 
+"a7991f9634e16c5594fd8d0af28eb9a3269d6ecc8b1d414ee66b27d0d5b18049", 
+"ad4bd4818c1b91f92de90fa559e046f0574da50c90bd00488c98895104205291", 
+"ad82ee5c2b1132d8d3c6035c02b2bf06614f4d370c145381fbc8f35acf3346bb", 
+"ae841a5d3c99874360854f506994ce760a7f20884dcd54395efd570aae1453d1", 
+"af0a1c3dbf06a1b95e3f88e3f98e5a1b696b96eca030e42856a34e5efe3924e9", 
+"b07f12fc76d6ffae6f7180bec95895f91a2913eae1776d5678c68d61cb9a7e5c", 
+"b2d3c4dcb720d828bde1760bdb5875a057e9c10649b3bbe9e6e22a4e66156db7", 
+"b36f131c4ad7c16bffef5751d763a6bdde769c75b951cd9025e807e1761adb80", 
+"b43dc12b6eb11071274f964bca097a174d62e8cfb623f3451c5cac5ff8d6f368", 
+"b67c2ddc3bd9dcc376c1678f230c9ab162c111b743841f5474c8094db62ca43d", 
+"b7195a465147fb22e12282c36b76a18ac1de0dae3cfaebcd9328df88f8976dfd", 
+"b9e86440342f3c13f5ee3eea90a08d1a9d243f60f2f37e2cb382162b1f419325", 
+"bb545866694f35de7ecf6e7978929eaafcb7a3c1a68854fe05a3d35981e36742", 
+"be1a75fc5a9248df594f2dfb4fbb32e27c94d4a01ba569ef294e215014906d5f", 
+"c081127dc63ef929854188913c230c1a734598848f5790985adf8bc1c73722de", 
+"c231e0cccdbcccc8794b8c8d543344c36af10d31fc9f7e038e42311d87a91c2b", 
+"c2fad96d3ee7df1be8101368610f413eb47d4f7e3477fea15498e97a4336f4d8", 
+"c434e31ddba8ff116d651b3887a5fc9f6b7c17992ef74057d958cf8313a3df13", 
+"c45846d4d024a84cbc5a9340fba58b97f7b7a14d12efa34258d7b6a10ab7e502", 
+"c6adf196d077efa992b672b5597da5a335a64ba2c61a19a319845373e8e90368", 
+"c94d6a040b9e1cbe26c8cfa561d715752500434b4d6fe795f48b67ff94af1ec3", 
+"cca372764eaee50190e1440c551f8f9943e3e2600882e89d0a262620767aee3f", 
+"ccaf671987cda2729baae792416c2687a0a1d746e5aad164fa76f0259e6f1677", 
+"cf19b5fb91ab6cedd4a5189a792ecc390a748be3470ef34ca90acc7f353526eb", 
+"cfd4266a2787901e3b704687e758122063a15bf4478d044c75a6842192c2584a", 
+"cfd4c640f5049bf5d85aef708b8c505bd7c3092df916a7ac5a4182ffb532e44b", 
+"d173965cf02673b00593930d9b9cb3d8ab56b05912119dc2d5395536d7f8ae55", 
+"d3730d2a8652d1676b40891ec5d3f7c3ef4ae0fe37e74c3aee2ecda7912437e6", 
+"d3e4bbbef77828ba171386e9b13aee059e1f20f466158b8c3e88ad75e7318b71", 
+"d4701b30805dc2308cf42db79be1bd3497073d8e4ab9dc282bf6fe011eeecbb3", 
+"d5ed71e7255587c4998d5f939d7855f8ed93544dbade7fb51745a603cdde632f", 
+"d5fc0599fa9f449f8823e558c6e92f4b724f1f5a7b7f190e3ae71f34d7f0d648", 
+"d9145c96355991032768f31b44e85e88569d6d93ed5e78b0301acc3674e391b1", 
+"daa86daccb5a9d9a68c7868b58e2d68133bb75be7b4d7014533908e9d75dc3b0", 
+"dc14e84d2ef14b79553e5e4f27edcae2a01a8ea3f79ca30224161dca7ad66fa9", 
+"dc74fe83312f9e55bec1659be9ba8089846769e9f2450553bcda57d89b1d2a25", 
+"dce43a57e2e950f9b2ac7003257c65070d90e3bfba57309e5ec7deea1e9e52c3", 
+"def2b97b17756abb3ebe4dbd4abf5c04a1bfd826f9d9f9a284f3908f2b13ae7a", 
+"e3fdd3d66f6388882530707da6f5b7dc35b94b80a3da59b60e3ebd5245edd456", 
+"e43557478bc640338c6adc975d4ebf2c3e0c334f9243d99f13e4a095c9c4738a", 
+"e5eedee2cd5a243b002b6e349a2a54820042228c0073fa98d68507fee29f5173", 
+"e65a4b4cfc98a76d983eafd6e018db9a18e345a8b463e7e06419f29c0a62b905", 
+"eb177ae9d7eb667f0b5660061511d57ffa51174fb751a7db2e82c0027274b689", 
+"eccfd28fcb141bcd626ea09117ce0f0cfcbe69f74a6058a8c40f97f52aa7b7b7", 
+"ed1dfca663bbda5153914ce9638d8c526be3d73c5d7c02de6062556140dca43b", 
+"ed6bf56b27d6a9a132b5dab51bf691b9002ad455bead2703eab43ddd8d7094d9", 
+"ef45400aa5b2702bbe4924783dbd3c1c7ae03fdd060f9ae0ba9f60629ce30691", 
+"ef81ab6acd97c2872c2efbb64dc243623b59e3508e50d560ced942a9e11c2e2b", 
+"f0994d4bbd8610ab678d095f82c1800e07bc9557076229fda7a3c7f6b9f9a953", 
+"f1d706c1783c410b924b293f891f4d9d0ad385d7f8c2593ce1e61382068b7168", 
+"f22b47ced72d99d45d09a1041f30b05b2763856cc3e4e729d0ff74b5b1ef33b6", 
+"f5d309db1e4e9ea2d7866b2c5c2d22749e191b4ef5eea60a455f35484915edc3", 
+"f74c05a72214feba49e9650130585e7bce5403325fbc8696b1b070525d8cde44", 
+"f7f0294590261ba66c07751ea6cbde36d1f1cfadb701ab8cec081909bc47d152", 
+"fbb936488ba2109e24f1e2f30b46ad702c3e1a2e90bb1c0e038697bab26516ef", 
+"fbd55891773c0f0b597af9f0aafd4ac7da981638dad892362107f8afa2b2791a", 
+"fc4272c6ebda86fb799d94af67ad6763072b109b71ffd6e005bfbca7d8e435d4", 
+"fd98a0c5fb06a70721cc2ae48b160cc0b4cd7f12c1a3ba56cc14b6597ef41028", 
+"feccc6925f6a65075851efc07d9aeee9486f1e9ad18669e9faadd3b9565dd2d3"
+)
+
+
+
+
+ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg<-
+df_filled2[, c("run", "glosa_pueblo_originario")] |>
+  left_join(
+    ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], 
+    by = "run"
+  ) |>
+  mutate(glosa_pueblo_originario_rec = if_else(
+ glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO", glosa_pueblo_originario
+  )) |>
+  filter(!run %in% neg_sil_width) |> 
+  group_by(run, clus_pam_om4) |>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om4, show_na = T)
+
+janitor::adorn_percentages(ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg, "row") |> 
+  mutate_if(is.numeric, ~round(.*100, 1)) |> 
+  knitr::kable("markdown", caption="Otra forma de clasificación PPOO con reporte vs. conglomerados (por fila) (excluye ASW neg)")
+
+cat("Fisher test (menos los -ASWs)\n")
+janitor::fisher.test(ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg, simulate.p.value=T, B=1e5)
+#p-value = 0.00258
+
+cat("No vale la pena repetir el post-hoc, es muy similar todo (lo hice)")
+
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+cat("(__________________________________________________________________)\n")
 reshape2::melt(ppoo_clus_pre_pam_om4_q, id.vars = "glosa_pueblo_originario_rec") |> 
   dplyr::mutate(glosa_pueblo_originario_rec= 
     dplyr::recode(glosa_pueblo_originario_rec, 
@@ -1485,12 +2227,10 @@ ppoo_clus_pre_pam_om4_q_rapanui<-
   dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario=="NINGUNO" & factor_inclusivo_real_hist_mas_autperc!="00"~ "DESCONOCIDO", glosa_pueblo_originario=="NINGUNO"~"NINGUNO", glosa_pueblo_originario=="RAPA NUI (PASCUENSE)"~"RAPA NUI", T~"RESTO")) |> 
   janitor::tabyl(glosa_pueblo_originario_rec, clus_pam_om4) |> 
   janitor::adorn_percentages("row")
-ppoo_clus_pre_pam_om4_q_rapanui
 
-
-cat("origen?")
+cat("\norigen\n")
 df_filled2[,c("run","glosa_pueblo_originario")] |> 
-    dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","factor_inclusivo_real_hist_mas_autperc", "codigo_region_rec_base")], by="run", multiple="first") |> 
+    dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","factor_inclusivo_real_hist_mas_autperc", "codigo_region_rec_base")], by="run", multiple="first")|> 
     dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario=="NINGUNO" & factor_inclusivo_real_hist_mas_autperc!="00"~ "DESCONOCIDO", glosa_pueblo_originario=="NINGUNO"~"NINGUNO", glosa_pueblo_originario=="RAPA NUI (PASCUENSE)"~"RN", T~"RESTO")) |> 
     dplyr::filter(glosa_pueblo_originario_rec=="RN") |> janitor::tabyl(codigo_region_rec_base)
 ```
@@ -1557,6 +2297,49 @@ seq_plot_pam_om4_q <- ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens,
 seq_plot_pam_om4_q 
 
 ggsave(filename="_figs/clusters_pam_om4_q_mod_25.png", seq_plot_pam_om4_q,  width = 9.5, height = 5.5, dpi=1000)
+
+#:#:#:#:#:#:#:#:#:#:#:
+
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4_eng <- ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4
+
+levels(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4_eng) <-   c("1.First quarter, MH(6623)", "2.First quarter, SUD(6612)", "3.First semester, MH(6522)", "4.First quarter, comorbidity(6574)")
+
+new_labels_eng <- c("Substance\nuse disorder",
+                    "Comorbidity",
+                    "Mental health\ndisorder",
+                    "Not in\n hospital",
+                    "Other\ncauses",
+                    "Censored")
+
+# Plot with translated labels and Times New Roman font
+seq_plot_pam_om4_q_eng <-
+  ggseqiplot(States_Wide.seq_quarter_t_prim_adm_cens,
+    group = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4_eng,
+    facet_ncol = 2, facet_nrow = 2, sortv = sil_pam_om_clus4_q) +
+  labs(x = "Quarters Since First MH/SUD Hospitalization", y = "Patient index number") +
+  theme(
+    text = element_text(family = "Times"),
+    panel.spacing = unit(0.1, "lines"),
+    axis.text.y = element_text(size = 15),
+    axis.text.x = element_text(size = 15),
+    axis.title.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15, margin = margin(r = -8)),
+    strip.text = element_text(size = 15, margin = margin(b = -15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom",
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",
+    strip.background = element_blank()
+  ) +
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels_eng, values = c("#E2725B", "#556B2F", "#D2B48C", "#FFFFFF", "#808080", "#000000")) +
+  scale_color_manual(labels = new_labels_eng, values = c("#E2725B", "#556B2F", "#D2B48C", "#FFFFFF", "#808080", "#000000"))
+
+ggsave(filename="_figs/clusters_pam_om4_q_mod_eng_25.png", seq_plot_pam_om4_q_eng,  width = 9.5, height = 5.5, dpi=1000)
+
 ```
 
 ```{r }
@@ -1586,7 +2369,7 @@ seq_plot2_pam_om4_q <- ggseqdplot(States_Wide.seq_quarter_t_prim_adm_cens,
     axis.text.x = element_text(size = 15),           # Tamaño de las etiquetas del eje X
     axis.title.x = element_text(size = 15),          # Tamaño del título del eje X
     axis.title.y = element_text(size = 15, margin = margin(r = -5)),
-    strip.text = element_text(size = 11),
+    strip.text = element_text(size = 15),
     panel.spacing.y = unit(0.5, "lines"),
     strip.placement = "outside",   # Para colocar las tiras fuera de los ejes
     strip.background = element_blank() # Elimina el fondo para que parezca más espacioso
@@ -1600,6 +2383,58 @@ table_data_pam_om4_q <- sprintf("%1.2f",pamRange_quarter_om$stats[3,])
 table_data_pam_om4_q <-as.data.frame(t(table_data_pam_om4_q))
 colnames(table_data_pam_om4_q)<-attr(pamRange_quarter_om$stats, "name")
 table_data_pam_om4_q |> knitr::kable()
+```
+
+
+```{r }
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| fig.cap: "Trayectorias de hospitalización, frecuencia relativa de estados en un gráfico de barras apiladas por trimestre."
+#| results: "hold"
+#| fig-width: 9
+#| fig-height: 5.5
+#| fig-dpi: 600
+#| label: 11plot-cluster2-grafico-trayectorias2-eng
+new_labels_eng2 <- c("Censored",
+                    "Other\ncauses",
+                    "Not in\n hospital",
+                    "Mental health\ndisorder",
+                    "Comorbidity",
+                    "Substance\nuse disorder"                    
+                    )
+seq_plot_pam_om4_q_eng <-
+  ggseqdplot(States_Wide.seq_quarter_t_prim_adm_cens,
+    group = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4,
+    facet_ncol = 2, facet_nrow = 2) +
+  labs(x = "Quarters Since First MH/SUD Hospitalization", y = "Proportion") +
+  theme(
+    text = element_text(family = "Times"),
+    panel.spacing = unit(0.1, "lines"),
+    axis.text.y = element_text(size = 15),
+    axis.text.x = element_text(size = 15),
+    axis.title.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15, margin = margin(r = -8)),
+    strip.text = element_text(size = 15, margin = margin(b = -15)),
+    legend.text = element_text(size = 15),
+    legend.spacing.x = unit(0.1, 'cm'),
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = -50),
+    legend.position = "bottom",
+    legend.justification = "left",
+    panel.spacing.y = unit(0.5, "lines"),
+    strip.placement = "outside",
+    strip.background = element_blank()
+  ) +
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(labels = new_labels_eng2, values = c("#000000", "#808080", "#FFFFFF", "#D2B48C", "#556B2F", "#E2725B"))+
+  scale_color_manual(labels = new_labels_eng2, values = c("#000000", "#808080", "#FFFFFF", "#D2B48C", "#556B2F", "#E2725B"))
+
+ggsave(filename="_figs/clusters_pam_om4_q_mod_eng_25_2.png", seq_plot_pam_om4_q_eng,  width = 9.5, height = 5.5, dpi=1000)
 ```
 
 De este modo, presenta el cambio agregado en la distribución de estados a lo largo del
@@ -1655,6 +2490,32 @@ trim_tasa_pam_om4_q_cens_rate<-
   dplyr::filter(rate>0) |> 
   dplyr::mutate(trans = paste0(from,"_", to)) |> 
   dplyr::mutate(across(c("from","to"),~  gsub("\\[->\\s*|\\s*->\\s*\\]|\\[|\\]", "", .)))
+
+cat("Número de transiciones de RM a noRM y viceversa\n")
+
+
+cat("Transiciones de noRM a RM\n")
+trim_tasa_pam_om4_q_cens_cnt |> 
+  filter(from=="noRM", to=="RM") |> 
+    summarise(n=sum(count))
+
+cat("Transiciones de RM a noRM\n")
+trim_tasa_pam_om4_q_cens_cnt |> 
+  filter(from=="RM", to=="noRM") |> 
+    summarise(n=sum(count))
+
+cat("Total de transiciones\n")
+trim_tasa_pam_om4_q_cens_cnt |> 
+    summarise(n=sum(count))
+
+cat("Proporción de transiciones de noRM a RM y viceversa\n")
+sum(trim_tasa_pam_om4_q_cens_cnt |> 
+  filter(from=="noRM", to=="RM") |> 
+    summarise(n=sum(count)),trim_tasa_pam_om4_q_cens_cnt |> 
+  filter(from=="RM", to=="noRM") |> 
+    summarise(n=sum(count)))/
+trim_tasa_pam_om4_q_cens_cnt |> 
+    summarise(n=sum(count))
 ```
 
 ```{r 11plot-cluster3}
@@ -1813,16 +2674,21 @@ Observamos que aquellos en el conglomerado que se encuentra un trimestre, la dur
 #| paged.print: true
 #| results: "hold"
 
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$fac_incl_real_hist_autoperc25<-
+  with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, paste0(ci_cya_conadi, ppoo_minsal_y_rsh_2010))
+
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens|>
-  dplyr::count(clus_pam_om4, factor_inclusivo_real_hist_mas_autperc)|>
+  #dplyr::count(clus_pam_om4, factor_inclusivo_real_hist_mas_autperc)|>
+  #2025-04-14: converted
+  dplyr::count(clus_pam_om4, fac_incl_real_hist_autoperc25)|> 
   dplyr::group_by(clus_pam_om4)|>
   dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n), accuracy=.1),")"))|>
   dplyr::select(-n)|>
   tidyr::pivot_wider(names_from = clus_pam_om4, values_from = n_prop, values_fill = "0")|>
-  dplyr::mutate(factor_inclusivo_real_hist_mas_autperc = factor(factor_inclusivo_real_hist_mas_autperc, levels = c("11", "10", "00"), labels= c("Se identifica/hay reconocimeinto", "No se identifica/hay reconocimiento", "No se identifica/no pertenece")))|> 
-  dplyr::arrange(factor_inclusivo_real_hist_mas_autperc)|>
+  dplyr::mutate(fac_incl_real_hist_autoperc25 = factor(fac_incl_real_hist_autoperc25, levels = c("11", "10", "01", "00"), labels= c("Hay reconocimeinto/se identifica", "Hay reconocimiento/no se identifica", "No hay reconocimiento/se identifica", "No hay reconocimiento/no se identifica")))|> 
+  dplyr::arrange(fac_incl_real_hist_autoperc25)|>
   (\(df) {
-  if (interactive()) {mutate(df, across(-factor_inclusivo_real_hist_mas_autperc, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+  if (interactive()) {mutate(df, across(-fac_incl_real_hist_autoperc25, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
   knitr::kable(df, caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO")
   })()
 ```
@@ -1838,44 +2704,49 @@ Vemos las categorías de clasificación de PPOO según autopercepción (en MINSA
 #| paged.print: true
 #| results: "hold"
 #| 
-chisq.test(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4))
+chisq.test(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$fac_incl_real_hist_autoperc25,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4))
 # data:  table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,     ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4)
-# X-squared = 6.2544, df = 6, p-value = 0.3953
+# X-squared = 7.8526, df = 9, p-value = 0.5491
+# 
+fisher.test(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$fac_incl_real_hist_autoperc25,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4), simulate.p.value = T, B=1e5)
+#p-value = 0.5482
+
 chisq_cramerv(
-with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, table(factor_inclusivo_real_hist_mas_autperc , clus_pam_om4))
+with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, table(fac_incl_real_hist_autoperc25 , clus_pam_om4))
 )
 # $chisq_statistic
-# [1] "6.25"
+# [1] "7.85"
 # 
 # $chisq_df
 # df 
-#  6 
+#  9 
 # 
 # $chisq_p_value
-# [1] "0.3953"
+# [1] "0.5491"
 # 
 # $cramers_v
 # [1] "0.02"
 message("Descartando valores negativos en sil width")
 chisq.test(
-with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus4_q), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om4))
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus4_q), table(fac_incl_real_hist_autoperc25 , clus_pam_om4))
 )
 # X-squared = 8.2613, df = 6, p-value = 0.2196
-chisq_cramerv(
-with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus4_q), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om4))
+fisher.test(
+with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus4_q), table(fac_incl_real_hist_autoperc25 , clus_pam_om4)), simulate.p.value = T, B=1e5
 )
-# $chisq_statistic
-# [1] "8.26"
+# p-value = 0.3417
 # 
-# $chisq_df
-# df 
-#  6 
-# 
-# $chisq_p_value
-# [1] "0.2196"
-# 
-# $cramers_v
-# [1] "0.03"
+
+chisq.posthoc.test(with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, table(fac_incl_real_hist_autoperc25 , clus_pam_om4)),simulate.p.value=T, B=1e5)|> 
+  (\(df) { dplyr::mutate_at(df, 3:ncol(df), ~ round(as.numeric(gsub("\\*", "", .)), 3))
+  })()|>
+  group_by(Dimension)|>
+  (\(df) { summarise(df, across(2:(ncol(df)-1), ~ paste0(first(sprintf("%1.2f", .)), " (p=", last(sprintf("%1.3f", .)), ")")))
+  })()|>
+  (\(df) { dplyr::mutate_at(df, 2:length(names(df)), ~ gsub("p\\=0.000)", "p<0.001)", .))
+  })()|>
+  mutate(Dimension= ppoo_clus_pre_pam_om4_q_clasificaciones[,1]) |> 
+  knitr::kable("markdown", caption = "Comparación post-hoc, conglomerado-PPOO autorreporte")
 ```
 
 
@@ -1889,7 +2760,7 @@ Ahora lo hacemos con la versión binarizada
 #| eval: true
 #| paged.print: true
 #| results: "hold"
-ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc_bin<- ifelse(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc=="00",0,1)
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc_bin<- ifelse(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$fac_incl_real_hist_autoperc25=="00",0,1)
 
 ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |> 
     dplyr::mutate(death_time_rec=ifelse(death_time==20,0,1)) |> 
@@ -2100,7 +2971,7 @@ surv_diff_4c <- survdiff(surv_obj_4c ~ clus_pam_om4,
 
 
 cat("Diferencia multiplicativa entre cluster TSM 1 trimestre y el resto")
-biostat3::survRate(Surv(time = death_time,
+biostat3::survRate(survival::Surv(time = death_time,
                         event = ifelse(death_time==20,0,1)) ~ clus1, 
                    data= ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens|> dplyr::mutate(clus1= ifelse(grepl("Un trimestre, TSM",clus_pam_om4),"1","0")))|> 
     dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
@@ -2197,6 +3068,130 @@ ggplot(km_data_4c, aes(x = time, y = surv, color = strata)) +
   theme(legend.position = "bottom")
 ```
 
+```{r 11l-comp-cov-mortalidad3}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+#| results: "hold"
+
+def_enc17_21 <- readr::read_delim("_output/def_enc.csv", 
+delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+# DIAG1= Diagnóstico principal del usuario
+# DIAG2= Causa externa de hospitalización
+def_enc17_21 <-
+def_enc17_21[,c("RUN", "DIAG1", "DIAG2")]
+
+# Suicidio (X60-X84)
+# Homicidio (X85-X99, Y00-Y09)
+# Intención indeterminada (Y10-Y34)
+# Armas de fuego (W32-W34)
+# Legal intervention (Y35.0-Y35.4, Y35.6-Y35.7)
+# Terrorism (U01-U03
+# Specific Y codes (Y87.0, Y87.1, Y87.2, Y89.9, Y86, Y89.0)
+
+invisible(paste0(" Fowler, K. A., Jack, S. P., Lyons, B. H., Betz, C. J., & Petrosky, E. (2018). Surveillance for Violent Deaths —
+National Violent Death Reporting System, 18 States, 2014. MMWR Surveillance Summaries, 67(2), 1. https://doi.org/10.15585/mmwr.ss6702a1"))
+
+pattern <- "^(X(6[0-9]|7[0-9]|8[0-4])\\d|X(8[5-9]|9[0-9])\\d|Y0[0-9]\\d|Y(1[0-9]|2[0-9]|3[0-4])\\d|W3[2-4]\\d|Y35[0-46-7]|Y87[012]\\d|Y89[09]\\d|Y86$|U0[1-3]\\d)"
+def_enc17_21 |> 
+  dplyr::filter(RUN %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, filter= death_time_rec==1)$run) |> 
+  #dplyr::filter(!RUN %in% runs_6025$run) |>
+  dplyr::select(RUN, DIAG1, DIAG2) |> 
+  reshape2::melt(id.vars="RUN") |> 
+  dplyr::filter(!is.na(value)) |> 
+  # janitor::tabyl(value) |> 
+  # arrange(desc(n)) |> 
+  dplyr::mutate(violent_death = grepl(pattern, value, ignore.case = F)) |> 
+  janitor::tabyl(violent_death) 
+# violent_death   n   percent
+#        FALSE 122 0.7820513
+#         TRUE  34 0.2179487
+
+#clus_pam_om4      tstop event  rate lower upper
+# 6623, Un trimestre, TSM(4) 104000.760    65  6.25  4.82  7.97
+# 6612, Un trimestre, TUS(3)  14730.962    19 12.90  7.77 20.14
+# 6522, Un semestre TSM(1)   7885.631     9 11.41  5.22 21.67
+# 6574, Comorbilidad un trimestre(2)   4487.281     6 13.37  4.91 29.10
+# 
+# Fuente: https://www.suseso.cl/612/articles-18722_archivo_01.pdf
+
+def_enc17_21 |> 
+  dplyr::filter(RUN %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, filter= death_time_rec==1)$run) |> 
+  dplyr::select(RUN, DIAG1, DIAG2) |>
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4")], by=c("RUN"="run"), multiple="first") |> 
+  dplyr::group_by(clus_pam_om4) |> 
+  dplyr::summarise(violent_death1 = sum(grepl(pattern, DIAG1, ignore.case = F)),
+  violent_death2 = sum(grepl(pattern, DIAG2, ignore.case = F))) |> 
+  ungroup() |> 
+  dplyr::mutate(violent_death = violent_death1 + violent_death2) |>
+  dplyr::mutate(total = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |> group_by(clus_pam_om4) |> count() |> pull(n), perc= violent_death/total) |>
+  dplyr::mutate(pq= c(104000.76, 14730.962, 7885.631, 4487.281)) |>
+  dplyr::mutate(ir= (violent_death/pq)*1000) |>
+  knitr::kable("markdown", caption="Tasas de mortalidad por conglomerado y causa de muerte, muertes violentas")
+
+
+
+  def_enc17_21 |> 
+  dplyr::filter(RUN %in% subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, filter= death_time_rec==1)$run) |> 
+  dplyr::select(RUN, DIAG1, DIAG2) |>
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4")], by=c("RUN"="run"), multiple="first") |>
+  dplyr::select(RUN, clus_pam_om4, DIAG1, DIAG2) |> 
+  mutate(
+    categoria1 = case_when(
+      grepl("^X(6[0-9]|7[0-9]|8[0-4])", DIAG1) ~ "Lesiones autoinfligidas intencionales",
+      grepl("^V[0-9]{2}", DIAG1) ~ "Accidentes de tránsito",
+      grepl("^(W[0-9]{2}|X[0-5][0-9])", DIAG1) ~ "Otras causas externas accidentales",
+      grepl("^(X(8[5-9]|9[0-9])|Y0[0-9])", DIAG1) ~ "Agresiones",
+      grepl("^Y8[5-9]", DIAG1) ~ "Secuelas de causas externas",
+      grepl("^Y([4-7][0-9]|8[0-4])", DIAG1) ~ "Complicaciones atención médica",
+      TRUE ~ "Otras causas no especificadas"
+    )
+  ) |>
+    mutate(
+    categoria2 = case_when(
+      grepl("^X(6[0-9]|7[0-9]|8[0-4])", DIAG2) ~ "Lesiones autoinfligidas intencionales",
+      grepl("^V[0-9]{2}", DIAG2) ~ "Accidentes de tránsito",
+      grepl("^(W[0-9]{2}|X[0-5][0-9])", DIAG2) ~ "Otras causas externas accidentales",
+      grepl("^(X(8[5-9]|9[0-9])|Y0[0-9])", DIAG2) ~ "Agresiones",
+      grepl("^Y8[5-9]", DIAG2) ~ "Secuelas de causas externas",
+      grepl("^Y([4-7][0-9]|8[0-4])", DIAG2) ~ "Complicaciones atención médica",
+      TRUE ~ "Otras causas no especificadas"
+    )
+  ) |>
+  group_by(clus_pam_om4) |>
+   summarise(
+      suicidios = sum(categoria1 == "Lesiones autoinfligidas intencionales" |
+      categoria2 == "Lesiones autoinfligidas intencionales", na.rm = TRUE),
+      accidentes_transito = sum(categoria1 == "Accidentes de tránsito" |
+      categoria2 == "Accidentes de tránsito", na.rm = TRUE),
+      otras_causas_accidentales = sum(categoria1 == "Otras causas externas accidentales" |
+      categoria2 == "Otras causas externas accidentales", na.rm = TRUE),
+      agresiones = sum(categoria1 == "Agresiones" |
+      categoria2 == "Agresiones", na.rm = TRUE),
+      secuelas = sum(categoria1 == "Secuelas de causas externas" |
+      categoria2 == "Secuelas de causas externas", na.rm = TRUE),
+      complicaciones = sum(categoria1 == "Complicaciones atención médica" |
+      categoria2 == "Complicaciones atención médica", na.rm = TRUE),
+      otras_no_especificadas = sum(categoria1 == "Otras causas no especificadas" |
+      categoria2 == "Otras causas no especificadas", na.rm = TRUE),
+      todas_menos_otras = sum(
+      categoria1 %in% c("Lesiones autoinfligidas intencionales", "Accidentes de tránsito", "Agresiones") |
+      categoria2 %in% c("Lesiones autoinfligidas intencionales", "Accidentes de tránsito", "Agresiones"),
+      na.rm = TRUE
+      ),
+      .groups = "drop"
+  ) |> 
+    dplyr::mutate(total = ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |> group_by(clus_pam_om4) |> count() |> pull(n), perc= suicidios/total, perc_todas_menos_otras=todas_menos_otras/total) |>
+  dplyr::mutate(pq= c(104000.76, 14730.962, 7885.631, 4487.281)) |>
+  dplyr::mutate(ir= (suicidios/pq)*10000, ir_todas_menos_otras=(todas_menos_otras/pq)*10000) |>
+  knitr::kable("markdown", caption="Tasas de mortalidad por conglomerado y causa de muerte", col.names=c("Conglomerado","Suicidio","Accidentes de tránsito","Otras causas externas accidentales","Agresiones","Secuelas de causas externas","Complicaciones atención médica","Otras causas no especificadas","Todas menos otras","Total","Proporción suicidio","Proporción todas menos otras", "pq", "IR suicidio", "IR todas menos otras"))
+```
+
+
 ##### 1.1.3.c. Comparación covariables- no RM vs. RM
 
 ```{r 11n-comp-cov-RMnoRM}
@@ -2238,7 +3233,7 @@ with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !r
 # $cramers_v
 # [1] "0.08"
 
-table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om5,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)|>
+table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om4,ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)|>
     data.frame()|>
     dplyr::group_by(Var1)|>
     dplyr::mutate(perc= scales::percent(Freq/sum(Freq), accuracy=.1))|>

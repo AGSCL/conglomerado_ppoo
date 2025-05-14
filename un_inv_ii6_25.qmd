@@ -2812,7 +2812,7 @@ cat(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time(
 cat(paste0("Editor context: ", getwd()))
 cat("quarto version: "); system("quarto --version") 
 
-save.image("avance250117_3_25.RData")
+save.image("avance250117_2_25.RData")
 ```
 
 

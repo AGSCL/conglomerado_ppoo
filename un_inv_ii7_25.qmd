@@ -54,7 +54,9 @@ cat("\014")
 if(Sys.info()["sysname"]=="Windows"){
  folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
                        "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
-                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
+                       ifelse(dir.exists("H:/My drive/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
+                       "H:/My drive/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
+                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/"))
 } else {folder_path <- ""}
 load(paste0(folder_path,"avance250117_2_25.RData"), verbose = TRUE)
 ```
@@ -132,6 +134,7 @@ if(!require(DiagrammeRsvg)){install.packages("DiagrammeRsvg"); require(Diagramme
 if(!require(rsvg)){install.packages("rsvg"); require(rsvg)}
 if(!require(survminer)){install.packages("survminer"); require(survminer)}
 if(!require(epitools)){install.packages("epitools"); require(epitools)}
+if(!require(biostat3)){install.packages("biostat3"); require(biostat3)}
 
 ```
 
@@ -205,8 +208,10 @@ tabla_prop_fila2 <- prop.table(tabla_conteo2, 1)
 tabla_prop_col2 <- prop.table(tabla_conteo2, 2)
 
 # Redondear ambas
-tabla_prop_fila2 <- sprintf("%1.2f", tabla_prop_fila2)
-tabla_prop_col2 <- sprintf("%1.2f", tabla_prop_col2)
+
+tabla_prop_fila2 <- sprintf("%1.1f", tabla_prop_fila2*100)
+tabla_prop_col2 <- sprintf("%1.1f", tabla_prop_col2*100)
+
 
 # Combinar ambas proporciones en el formato "fila / col"
 tabla_combinada2 <- matrix(
@@ -229,7 +234,7 @@ tabla_combinada2 |>
   ) |> 
   kable_classic() |> 
   footnote(
-    general = "6612= Un trimestre, TUS; 6623= Un trimestre, TSM",
+    general = "6612= Primer mes, TUS; 6623= Primer mes, TSM",
     general_title = "Nota:",
     footnote_as_chunk = TRUE,
     escape = FALSE
@@ -237,7 +242,310 @@ tabla_combinada2 |>
 ```
 
 
-Luego vemos la clasificación de PPOO por cluster
+
+
+```{r 31b-act-por-cie10}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+cat("2025-03-01: general")
+first_episode<-
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run)|> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+
+second_episode<-
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run)|> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+
+first_episode_rec_c2<-
+agregar_columnas_icd(first_episode)
+  
+tot_cie10_clas_c2 <-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_rec_c2$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_rec_c2$lesiones_amplio, levels = c(FALSE, TRUE))))
+  )|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+#         FALSE        TRUE
+# 1 4858 (80.5) 1180 (19.5)
+# 2 5612 (92.9)   426 (7.1)
+# 3 5645 (93.5)   393 (6.5)
+# 4 5652 (93.6)   386 (6.4)
+# 5 4215 (69.8) 1823 (30.2)
+# 6 5072 (84.0)  966 (16.0)
+# 7 4903 (81.2) 1135 (18.8)
+# 
+
+second_episode_rec_c2<-
+agregar_columnas_icd(second_episode)
+  
+tot_cie10_clas_2nd_c2<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_rec_c2$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_rec_c2$lesiones_amplio, levels = c(FALSE, TRUE))))
+  )|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+cat(paste0("Second episodes: ", 
+df_filled2 |> 
+    dplyr::filter(run %in% ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup() |> nrow()
+),"\n")
+
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-04-26: TSM 1 semestre")
+first_episode_1_month_tsm_c2<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om2))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_1_month_tsm_c2<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om2))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, MH: ", nrow(second_episode_1_month_tsm_c2),"\n"))
+
+#:#:#:#:#:#:#:#:#:#:
+cat("2025-04-28: TUS")
+first_episode_tus_c2<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om2))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 1)|>
+    dplyr::ungroup()
+second_episode_tus_c2<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om2))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::filter(row_number() == 2)|>
+    dplyr::ungroup()
+
+cat(paste0("Second episodes, First quarter, SUD: ", nrow(second_episode_tus_c2),"\n"))
+
+#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:
+
+first_episode_1_mnth_tsm_rec_c2<-
+agregar_columnas_icd(first_episode_1_month_tsm_c2)
+
+prim_mnth_tsm_clas_c2<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_1_mnth_tsm_rec_c2$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_1_mnth_tsm_rec_c2<-
+agregar_columnas_icd(second_episode_1_month_tsm_c2)
+
+second_mnth_tsm_clas_c2 <-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_1_mnth_tsm_rec_c2$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:
+
+first_episode_tus_rec_c2<-
+agregar_columnas_icd(first_episode_tus_c2)#first_episode_com_c6
+
+prim_trim_tus_clas_c2<-
+rbind.data.frame(
+  format_table_vec(table(factor(first_episode_tus_rec_c2$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(first_episode_tus_rec_c2$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+second_episode_tus_rec_c2<-
+agregar_columnas_icd(second_episode_tus_c2)#
+
+second_trim_tus_clas_c2<-
+rbind.data.frame(
+  format_table_vec(table(factor(second_episode_tus_rec_c2$organic, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$substance, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$esquizofrenia, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$otros_psicoticos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$bipolares, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$depresivos, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$ansiedad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$personalidad, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$lesiones, levels = c(FALSE, TRUE)))),
+  format_table_vec(table(factor(second_episode_tus_rec_c2$lesiones_amplio, levels = c(FALSE, TRUE))))
+)|>
+    (\(df) {
+  colnames(df) <- c("FALSE", "TRUE"); rownames(df)<-NULL; df
+      })()
+
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#::::::::##::::::::##::::::::##::::::::##::::::::##::::::::##::::::::#
+#
+#
+
+cbind.data.frame(Total= tot_cie10_clas_c2[,2],
+                 Total_2nd= tot_cie10_clas_2nd_c2[,2],
+                 Prim_trim_tsm= prim_mnth_tsm_clas_c2[,2],
+                 Prim_trim_tsm_2nd= second_mnth_tsm_clas_c2[,2],
+                 Prim_trim_tus= prim_trim_tus_clas_c2[,2],
+                 Prim_trim_tus_2nd= second_trim_tus_clas_c2[,2]
+           )|>
+    (\(df) {
+  rownames(df) <- rownames_vec_c6
+  rio::export(df,"_output/diagnostic_classification_cie10_c2.xlsx")
+  df
+      })() |> 
+  knitr::kable("markdown", caption= "Clasificación diagnóstica CIE-10")
+```
+
+```{r}
+#| message: true
+#| include: true
+#| warning: false
+#| error: true
+#| eval: true
+#| paged.print: true
+
+episodes_1_mnth_overall<-
+df_filled2 |> 
+  dplyr::filter(run %in% ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+
+episodes_1_mnth_tsm_c2<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om2))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+episodes_1_mnth_tus_c2<-
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om2))$run) |> 
+    dplyr::select(run, diag1, diag2, diag3, diag4, diag5, diag6, diag7, diag8, diag9, diag10, diag11, fecha_egreso_rec_fmt, estab_homo) |> 
+    dplyr::group_by(run) |>
+    dplyr::summarise(n= n())|>
+    dplyr::ungroup()
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+rbind.data.frame(
+df_filled2 |> 
+  dplyr::filter(run %in% ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6623", clus_pam_om2))$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75)),
+df_filled2 |> 
+  dplyr::filter(run %in% subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, grepl("6612", clus_pam_om2))$run) |> 
+  pull(days_elapsed) |> psych::describe(quant=c(.25,.75))
+)|>
+  (\(df) {
+ rownames(df) <- c("Total", "M1, TSM", "M1, TUS"); df
+      })() |> 
+  dplyr::select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+      (\(df) {
+  if (interactive()) {df|> rio::export("clipboard")}
+  knitr::kable(df, "markdown", caption="Días de hospitalización por cluster", digits=2)
+  })()
+
+
+rbind.data.frame(
+psych::describe(episodes_1_mnth_overall$n, quant=c(.25,.75)),
+psych::describe(episodes_1_mnth_tsm_c2$n, quant=c(.25,.75)),
+psych::describe(episodes_1_mnth_tus_c2$n, quant=c(.25,.75))
+) |> 
+  (\(df) {
+ rownames(df) <- c("Total", "M1, TSM", "M1, TUS")
+   dplyr::select(df, -any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se")))
+  })() |> 
+  (\(df) {
+  if (interactive()) {df|> rio::export("clipboard")}
+  knitr::kable(df, "markdown", caption="Número de episodios por cluster", digits=2)
+  })()
+```
+
+
 
 ```{r 21c}
 #| message: true
@@ -270,6 +578,346 @@ Generamos un gráfico de PPOO por cada conglomerado.
 #| fig-width: 10
 #| fig-height: 5
 
+
+
+# 2025-05-03: cambiar etiquetas de los dos grupos
+levels(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) <- sub("Un trimestre", "Primer mes", levels(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2))
+levels(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2) <- sub("TSM\\(1\\)", "TUS(1)", levels(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2))
+
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
+
+
+ppoo_clus_pre_pam_om2_m<-
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario)) |> 
+  janitor::tabyl(glosa_pueblo_originario_rec, clus_pam_om2) |> 
+  janitor::adorn_percentages("row")
+
+#0 pacientes en cluster TUS YAGÁN (YÁMANA), AYMARA, COLLA, DIAGUITA, KAWÉSQAR; 
+#Pocos pacientes en cluster TUS: OTRO=2, RAPA NUI= 5
+#Pocos pacientes en TSM: YAGAN=2, DIAGUITA=3, KAWESQAR=4
+
+
+invisible("2025-05-03")
+cat("Sólo RAPA NUI y MAPUCHE (ver por RUN, al menos una observación que se identifique RAPA NUI o MAPUCHE)\n")
+ppoo_clus_pre_pam_om2_m_act<-
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario)) |> 
+  group_by(run, clus_pam_om2)|>
+  summarise(sum_ppoo= sum(grepl("RAPA|MAPU", glosa_pueblo_originario_rec)), .groups="drop")|>
+  ungroup()|> 
+  mutate(sum_bin_ppo= ifelse(sum_ppoo>0, 1, 0))|>
+  janitor::tabyl(sum_bin_ppo, clus_pam_om2)
+janitor::chisq.test((ppoo_clus_pre_pam_om2_m_act))
+#X-squared = 4.2837, df = 1, p-value = 0.03848 # ES SIGNIFICATIVO!, x2 OR de pertenecer a uno de estos pueblos en TUS; 1.5 veces la prevalencia
+
+cat("Sólo RAPA NUI (ver por RUN, al menos una observación que se identifique RAPA NUI)\n") #NO SIGNIFICATIVO
+ppoo_clus_pre_pam_om2_m_rapa<-
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario))|> 
+  group_by(run, clus_pam_om2)|>
+  summarise(sum_ppoo= sum(grepl("RAPA", glosa_pueblo_originario_rec)), .groups="drop")|>
+  ungroup()|> 
+  mutate(sum_bin_ppo= ifelse(sum_ppoo>0, 1, 0))|>
+  janitor::tabyl(sum_bin_ppo, clus_pam_om2)
+
+janitor::fisher.test((ppoo_clus_pre_pam_om2_m_rapa))
+#p-value = 0.3708
+#OR:   1.694165 
+cat("son 11 casos!\n")
+
+
+cat("Clasificando por Mapuche, otro no-mapuche, ninguno puro y desconocido puro")
+ppoo_clus_pre_pam_om2_m_clasificaciones<-
+df_filled2[, c("run", "glosa_pueblo_originario")]|>
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|>
+  mutate(glosa_pueblo_originario_rec = if_else(
+    glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO",
+    glosa_pueblo_originario
+  ))|>
+  group_by(run, clus_pam_om2)|>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om2, show_na = T)
+
+janitor::adorn_percentages(ppoo_clus_pre_pam_om4_q_clasificaciones, "col")|> 
+    mutate_if(is.numeric, ~round(.*100, 1)) |> mutate(clas_por_run= factor(clas_por_run, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche")))|> 
+  arrange(clas_por_run)|>
+  (\(df) {
+  if (interactive()) {df|> rio::export("clipboard")}
+  knitr::kable(df, caption="Porcentajes por columna, conglomerado vs. PPOO")
+  })()
+
+janitor::fisher.test(ppoo_clus_pre_pam_om2_m_clasificaciones, simulate.p.value=T, B=1e5)
+#p-value = 0.001
+
+
+chisq.posthoc.test(ppoo_clus_pre_pam_om2_m_clasificaciones[,2:3],simulate.p.value=T, B=1e5)|> 
+  (\(df) { dplyr::mutate_at(df, 3:ncol(df), ~ round(as.numeric(gsub("\\*", "", .)), 3))
+  })()|>
+  group_by(Dimension)|>
+  (\(df) { summarise(df, across(2:(ncol(df)-1), ~ paste0(first(sprintf("%1.2f", .)), " (p=", last(sprintf("%1.3f", .)), ")")))
+  })()|>
+  (\(df) { dplyr::mutate_at(df, 2:length(names(df)), ~ gsub("p\\=0.000)", "p<0.001)", .))
+  })()|>
+  mutate(Dimension= ppoo_clus_pre_pam_om4_q_clasificaciones[,1]) |> 
+  mutate(Dimension= factor(Dimension, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche"))) |> 
+  arrange(Dimension) |>
+  mutate(Dimension= as.character(Dimension)) |> 
+  knitr::kable("markdown", caption = "Comparación post-hoc, conglomerado-PPOO autorreporte")
+
+cat("Tampoco resulta significativo en https://adaptivedesignstrial.shinyapps.io/posthoc/\n")
+
+
+invisible("Otros reportados (no mapuche) pertenecen menos Primer mes TUS(1); The Bonferroni corrected significant level for Exact approach is: 0.05/(R*C)=
+0.00625; pero no habia nada destacado en verde o amarillo")
+
+invisible("pvalue based on Adjusted residual y pvalue based on exact approach, son significativos al 0.01 par Otros reportados y baja pertenencia  TUS; pero no hay yellow or green are significant based on the exact approach under the Holm-Bonferroni correction.")
+
+invisible("0.04 tiene los pvalues basados en residuos ajustados y pvalues basados en la aproximación exacta , en el que Mapuches tienen más proporción TUS")
+invisible("0.05 tiene los pvalues basados en residuos ajustados y pvalues basados en la aproximación exacta , en el que Desconocido puro tienen más proporción TUS")
+
+invisible("Los desconocido puro son quienes tienen i_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1, es decir, históricamente son reconocidos o se han autoidentificado, pero no en MINSAL (que es el que registra la mierdita)")
+
+#####::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#####::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#####::::::::::::::::::::::::::::::::::::::::::::::::::::::
+cat("Ahora descartando ASWs negativos")
+
+run_aws_neg_m_c2<- 
+c("01a17af6c7b8aaba09226eff980bda2c6257c7a830e6be8e853a67743070c779", 
+"05f17cc6fc0a8e7e45687470ce81ac223f92c6c4320e2cc293d3fa853d1d4478", 
+"06129e059d0ef701be2ae0ff8b4c1f604fe2286efc1b05db190b7844a3cb4879", 
+"0c1ed1bb2ff17afe1bd9ccc41f3a3028750a6549a056ab657a8be5d231ca1452", 
+"0c8f79a7c405104ce14e8d7b31dcc6fb70248fd6ae7de55a642d30eb12d86721", 
+"10f8b961d7cbff7cec8e4396f7a3936e54251b78c82c6ce15c84398ded89d845", 
+"143139a49434bcf76fdc0cb3d94decc1070e4d229351c0a49e19bb4dc5ae4d6e", 
+"156fb1388cc49601df8d578e6d2c04ef52a9908cb5dc5c1392d4a726223c1fa3", 
+"15e3dd4ec5b6fe40be3c8ca7b1bfc648c502d6a4488bd65091e32c751c747872", 
+"15ebcf907feeff230ced69bc57cff0b53c02af27aeb552fedf80e40e7d3b8639", 
+"16d0fda9b29b8afa26be40a49accfd7ecc0eb8f4e41d7b0ec4e5cb791ca23622", 
+"19e0e606397d62e5b9d4d71797877302588c7e17c46b1ed4b9712f11910b9677", 
+"1c45c5a100a9bf4bf31d48c1794295388f766a1d6916c69d0e8bf748843d37ad", 
+"1caba8fbe7076a293a2ae24160ddd627b6a89aea6271cc13f1b9c4f9f48b1b54", 
+"1dd360fb4101d4f4b78162344d80b257c745d2eb81d57f96526a29948b31864c", 
+"1f786ae1dcea0aebc6339e03176f644a248660bae766fa651f4d4f6bf0eb3c0e", 
+"2059f8a5b4ff2fca074ec1e0b549dcccde4231e77a51943b4bac770ea1c70439", 
+"21d49f5e2ead538e7802f5854106dc7da7f200f538d13100bad8e9be9da99317", 
+"22d8751072f17d01fed159cf7b26d0128fcae823732b484a3409593e508a0321", 
+"22d8a99fb68720cceb1f5c342017e3298f37c2e3d120b0f7a63d67216b0d501c", 
+"22f44ce402659a7c087bf0b04b38480e8ec81f727905cae84db4897ffa5979c8", 
+"230c3cab3cd1233bdcdf1785f4692c143a5be5fde7963198cfa2d74fc7d9c606", 
+"2421e8fa7063ed95cfc14a295e2254e14aa5ca1e8fba117c5f4f27dad65cef18", 
+"26f6e597bba2f2f1cc4e0d505e0fe7f16ad77271fd911b582b6350a4510a2eb1", 
+"292bf9d2c3ee37eb4d413f23f12507e5871d47548cb72dff9f1a211b10679e32", 
+"29b4c8366efb3e73bc76ffa8aa52013eb8160c98a18e1997aa906a05a15c4786", 
+"2aeaebb41eaabceca08746649ab149f5c68b4b5b96a281159f10e0a967bb39af", 
+"2ce4ba1cf5aa79249648246ffdfe46fdd8a42be8ec368dfc7989a89616ef3c26", 
+"2e0a7bda343db6684115241dcf018dc6b1d16d563614f9e45c330567bc128fa1", 
+"2e254b89d0d17b898d8f05bd84c2b982b346ba6241d41413686a79ab7d8da1fe", 
+"3166a179de48204cfebd1cd70ad0d1f0d42769b93d2d72a0ad25a740aaa8da9f", 
+"3492ba15e342e0665e53bbddc3738c7d2836ba13be3f4e4e41d9128778cce6fe", 
+"368ca29d3ff7b234eb4b866b396367d5bad9ae8e71ee8737b351d057bdf2e632", 
+"36b56876b006273d34b566c67508c488e49b429742c647bacc3ce55069af9d66", 
+"3a091a12d80b1a9dd1d916af41fd1c74c168a27c4e7ef74a85a8b97e6b1c57f3", 
+"3a25c7e1145e49c50a440bedd7ad4273b180e14b34089caced81791bcb757ab8", 
+"3afc4fe7fb1fdc9f96b2087d12e899ac80746a8e5afa51e309c5ee2cae102cc6", 
+"3be4f2bd0c5d99dca82fa9ef55e1a5447fa4fb006e8be90215e5bd2c2f838cf6", 
+"3c8bcf4ce37c348517d1e1ac7d986e6993f46bfc1ef7cdc0aeca5bce164a5ed1", 
+"3ca6ed74da619be17d401d14d312c569156c6550894cbbdc3d338741f8559132", 
+"3d8f675f1890ceffd21688dcc6ef98cec729213c79759e4c80a33cc7ed54f6f6", 
+"3da296dc5ba0010d3df89941771309126309d349f599b6caf8a9bb705820706f", 
+"3ddcc03d81232fd0126f78c5cbcbc17e6898ec064a9944d7d7b28bee7ca0d878", 
+"409a41987274a15c204602c5ae18e42b9a1c4b74fa434ee7a0d228f1c9794f65", 
+"416e87167b7df7aac0b1d19b44aaae6f374f8d506ec54364b0c97b074458a0a8", 
+"44c4aee40a12fd4fce4aa87febd8dbd689f06bb26e7700c492d9f728ef624ee1", 
+"479e86260a31a04b61f1d284e0541fd8096b38c22fd18a19f070efe7adaa179d", 
+"47d5637afbc09a7387de64c4a3050ef9d21d23928149c54955a7f08b101748e8", 
+"49ef0e2104adc5dcfd59ec8cf539bc3d0922cdc769869209b91555e8fec7d349", 
+"4a567ac55bd296932c89913914a01dc16d3ed3ca419680cf859829b4ec5ec662", 
+"4dc72b4b0c1e89d0b20894f67716d8a71dad092188c7627965f5d5314126972c", 
+"4ddc8ad0c1f28a2a878474c7187d89e5ae02ac4bea0c12bcabae9901ca18e461", 
+"4fcdd8befe66235c0e8792eb6980e2880b7abd0123fedafa75eaa47903852796", 
+"5048772db5bb399ef14140215c71b7d060ddf0c368261ad260ecb96d5def802b", 
+"50cf272a7ff1fbdadafd85e67cdcf979c0d1e22a6f5d505831cbce39a189fa74", 
+"51af67533d59abea5602b34ad1764b1bcd44b5e4f510a7b7ea45482b25417632", 
+"51f2ccf8d5621a7cc4048311d393d406cae4ef26307a1397acd0993517a02187", 
+"5344250ae4bca7ff8164e53d9fbebd674ed2af30c217b344a569bf65a45a5d99", 
+"53ca44ea202c15fb2dfe6ab815871436ac61e22b9264e6d236ac2841a9ff1bcb", 
+"54766fa4be2866c8f8397bac771aafbfc7106db476ede2c0ddb7d648c7f8856a", 
+"5757d73e17118586df3e6d60cbf2315ff1dc688d2685e5f07845c4b56f44b6ba", 
+"5799dab6dd3325039744fe0b81ac128a3d697cc8d14586d43fc20a8d6049c636", 
+"59281d00f707101af80165dd97a302d9b38bb6fa8a3d1afdd8e31d7d9c08c1b6", 
+"5a6e4d1a6de8d1e4c43745406fb9c6689c9357d56d47fc4e1ccc826d4ab9001e", 
+"5a92ed01346a9de008b7943d29d788c8bf95d57a5368ebb60629b0436cd24b7d", 
+"5aa79e26e86d5d074f65aee2feffae7050f61b2daaa5b01920678181d576a194", 
+"5aebfd0f6d18cb695982fd71e8705202e42c911a0df79a49c47b8fa08176a342", 
+"5debf54063b68f64901b1559dcc0dec09670ec76aaaa858131eabc2392c40976", 
+"63418ab30d9d557d742edd44583364ac4c5e5fc15dc1863d07bb366e519d46e3", 
+"63b6b54d0c1484867a0a72b641204bd10b945455621e573994135cf6377c3389", 
+"63f9dabe4f2e0f664868de6fe7f9ce2443db7443f24021caf1b2cda06801b7cc", 
+"652505448c9c38076c682ecee925063cd45bbe4ad6ec2c96f2ed4a99c7f006c3", 
+"659c340280b4ae53640409046d6ba0e142dca124f2bd6c638c8324cf2d1b0838", 
+"66765342c59d7f1a7aa729931b0f2af72cc0b71358ea7cdd3e8f39ed2294132b", 
+"674726d192962840463fa4e47b530d5bee584c28c7a3331e0acda8c3ad0ddc1a", 
+"67b8ffacc05bb4cd3cf2585db0ba0bdefc13bea93cbb2bace4aa14379890fb46", 
+"6b035600c102b263e898e7c25d55c4b14cb821f45370220611c0788231160b4f", 
+"6b32287b7a1bb2b079c9a5946a3f337e4caba4a78022903a9af5b66848792b29", 
+"716cf8d45a14e56ed0d7c63b85d60ec6baced3e7c43e6a189a8b18a2be3e9f49", 
+"73df60635de4da05addd6ea3c8a0cf3be1ca410668a63ec057693057da367c93", 
+"751a72c5f71efe03adec5375c23a2b91ed3cdbacb7c8466320809f853abb59e6", 
+"76c1f705d7125d55924c2ac4dae07abe911d0ffb4f5ca2e1d27a2f2186f3a071", 
+"77183427f0d48323dc6aaf1105877b92e3bd3d4e736bc77abd8e87cff266e0c3", 
+"7c83acf859263509d2dbbe0f07cb90266cd8d184ff88c83c972684af20354284", 
+"80026dac5038bb76d5c75f500aeb807d439ca6a333146e6d7d117c4781a34089", 
+"82e69c3dd8fef335b86b4f4fbe25a1ac27d48e5ad0d00dcc8d33f2282bb38b25", 
+"8319a9336b81f76e5942fa232aeda15b14beb16a8fe62ce9dda66eca86cd6b03", 
+"859fd8521edb09fdb970e21bc3cee040735ac3b94c2a51c825b8798f8236fd54", 
+"863eb19ffe85217ac8efc5dd0c32b4c6c28f639f9bad2c84796823b7a5fb2637", 
+"8701cc9de4d6ab0afcebb1767dd0d4a434906f6f66092ec5aa764aaa4486cc8a", 
+"882f02585925ee6aba9966556552b591760f11f61201b74254bb8ce3fa1a91aa", 
+"88c9c1ae45655c4505bbf37d9f17ba81674693e616227618ccd25ecced2fc397", 
+"8a3d27b60ce1b1575b5f0de528d28b8a9c1ef7db799fa30881d1ff360f03e59a", 
+"8b0c786a1703274bbcfe1a9f20f24b4411a49d2a9677682a0328b4fa81d02ebd", 
+"8b36fc2862259034358f3b8432a70f031295015b6975ed83a20d7d1d8ac2f681", 
+"8b8905a4f27dfe7c31585af78b3edc76941f450b914587dcde88830dcabeefa8", 
+"8c45df956595ccb4e7f145d2cd34c82f816bec8b16b3e619d89ef5dcc7c70b93", 
+"8ce465fe751f82c9d7908adae36e1ad97bb1f33b11373b3e8dd50ae0cffa8de6", 
+"8d61df117050a2d45dc4a8d541ee5d4ffaf2e012584ea6c1fbe2ea94ef65d04f", 
+"8db2e83fa9536bfe12586b88f3e344b9543096adc22bb8963263c4c30e8f1d7e", 
+"8fa7b87093d30ea3298e257f8517d54460521ae583b3e4aa554708f010215614", 
+"8ff4881771d6191d46d9ea46503e1f8515b4c437ea67adcbf12142258c432dd9", 
+"9202884dded8b014d48101bd97aa6d80cec743c2437e5d4496158b2d13a19db8", 
+"9794134dbbadc4c9802f77001b5357269d3df4c290a565f2d0b108c45abfce65", 
+"97ac376fb9099cef6fabf948ca563ce5e70dbbff820897b53689a284910b0fb4", 
+"981993c0fe52ed2c38380732392e8894452c0dae55d8e11cd458ecc7b8a45f4d", 
+"982db16ab13704550b10d584334df5914c4fe5309a10211f3c25672f7200cb87", 
+"987a14457dbc6a9a397ab46c82005b718c7dd8b10a6c3d7d8dc300e79c30732c", 
+"9b078aa545e9a862f895d372b25b2fd7ea5550217b83d45e0ad91b7b969db31f", 
+"a0eb91edd5daf7b2576f8eb3109a60ccb1f0280a5afcc19659bd6547efc5979d", 
+"a258265be5f7f2ab78c3bbb9946f3713188bd6ef844bf96f5eac5429679036ca", 
+"a294f117b9c905203baabd164efa30d3e6a2929446899a52c426ad35f67c7eb7", 
+"a2b192de8292bd2f65cbaed42be122fc36272b0228ef3bce8c5f33ea8ed437cb", 
+"a5a2cf6332da3bd1cc79c936cbbdd3de9b0d576f17ff6fbdaaafe896e9e88ca2", 
+"a67a66b3e385611d077166b652bff025a8a4ecc5569e34bb6856d3dca2919fa8", 
+"a878587878c3de4df64fba2209420097a7db38d9d41537695255463bc428fe4e", 
+"a8c7b71fcff0f08f34160f3296c27d59fbfb808a67c2ec437b34e9d967668b5b", 
+"a9c7c1b0c03849e605533aee147c0c2c5c456641ece164f9ac69cf9aacfeefa1", 
+"ab3ae8dc4b3ae0be7df1dfdb703b72ea21a5f2ae0e6b947088b0f62e10567d70", 
+"ac794c50715c2b2685f5ae8ba0f4cbc3d953fa19a5c86c7ec54a2451d7236c71", 
+"af42d9d175547bba724f0708e8ff5919499c88e5527368d70135b2c3e828cba5", 
+"b005ddbf6bfb6efe4cc1aaac8d72fbd3c68881e6a026c715cf1be70f6c70cf05", 
+"b22ce16967b23f36e05ff814819418b6d3c8712ab1cc8c8d3377f72bd0d6af5b", 
+"b3f9c8efcb7f9c0979235c66474113954848ada89a5f28442a6023554aaf3f12", 
+"b4bba02cc28643c9c7405e9810deee792d08453215c78f9010a1ce79edff2e71", 
+"b4fb1ac1cf75428a3a68b12ba48170ecae66e5b55658b8178b999c5b29d66c57", 
+"b5dde7c32a5ce6432d6beecf3f2487ff891a69f89227679e04bffd7b435ef091", 
+"b612a5ea4d3dcc69487906f396eed3046f433e90005d44c36b055ff11f602646", 
+"b612bbafdb837896522c3d865091d0f15d3e5d2ad938d003361d18077e48e0a6", 
+"b8c5ed0b7f7910ed05899dc929f7e7e1063f03f7782e09b7b39103b3f5f85acb", 
+"bc266e810557e3e8023c2d583437921cd51a04c02f0032c69cb147e583661dd6", 
+"beb8ab9ac10c8f534da7c9828037a8b7447b1c347a9d54737505f95ce22ddf21", 
+"c0969d9d9fdd99fa58c4f347d7888738fd8f7a8313ba541557f450bf7449dce9", 
+"c14bd9b31f1380e4d4e8e89c1d9000b5b52f67265f003b320dfb067228217b2d", 
+"c3b5a8c1f1a72937047a741f53e0ea82054716c58d456b8a31d446bf757f672c", 
+"c6c9188f2e68dfb65abad9b8e3a9715b4f067eb038e9350c6988b6ed49b49c66", 
+"c72545e70eae8df1378e03264a71dc31ed17e693be7c1ae970865154ceeb6a15", 
+"ca81226f53a7cdcc92fe4658a4ae3fafceebdfe17d7dcaf56fc1b992d2d8af53", 
+"cabf2cbc8e1235c8d1885345cc9735263ab91531f2ca9a114a5e29fa7723bb5b", 
+"cc2ccaba0be871525c840b58ef6cf8978ebeb113fada80af4e4f2bc24b8a9faf", 
+"d05204d028979e7fce9420fb9157dd68152714ee1b54cf5ccaef0791461bc2b2", 
+"d0f4b17e80dacf858a18f8751a560ca11076474e6da7f5ff1dcd023e8b9009ca", 
+"d25db5c721797cb9b945dea5ef68fe8ca05c3f049801f1ba86706928a3afd992", 
+"d639aafb7d0d19aed977cda8aaffa1544f7d9d246fd4855edf3cf4e5c60e411c", 
+"d71b4d52b5bba45afaffc84266cd7c7880699f1b4c2c5b4a597985401699eb65", 
+"d856a4924f9ddf174c6838b49c5e655b245681df8974fa8aed9797a5d8f7dbac", 
+"d875b9c8a8ca2c0a901e32fc88c2cf2d5bbabddcb92a3579a9d1112176c06aac", 
+"d977bea926a9a1a7a5dba6bc5b103b182606fea484e46ee7a449b8924e3b66a6", 
+"d9d7451829ec38ca26b30373c4627f5d1d1588f363063b588b7f56523599e748", 
+"da7afe33b380af5b490f77635c67a1000117575411c5f214b01a5cafd5520d98", 
+"db701e9598a812dada990afbd489e8c9fa5ec71fd06232cf46dd97a75acf5bcf", 
+"db851fb46fce284c2bc92a3710e767e955978b314d43ba123aa61260e430dfd5", 
+"de210239948e447535998711e3fed8ec4a0ad63e2e785822a79e9bd67f2c46ed", 
+"de83dc2c6de928fb609c97afe55ab09a1c434818476a28a8c44550254799eea9", 
+"e1e3160e88450628aa76c4753259f327242df5a2e5809f9709ff70a70ff7b35f", 
+"e574bbb5b38a22517a61f2605bb75c90fd7273b683890cf13b6612c2feb620ac", 
+"e6302300219b7cc58f914c383206e240f8e07b166c57a92b47daa9fac516a4f2", 
+"eb13b3e02db36ff1d73dcea51120834b1807e48fc64b322fbb50573bb7d736a5", 
+"eb589c54ee9b571f8ad0b77d9fc8271e3c91ad3238356936d691c827716625e5", 
+"ec55dd923483772d1b47417fb846ff4d6d695a5bc66c300cb748492a1b63956d", 
+"ec824852c20916ca206cff722c3b9f07d3c34ff46d5e29e233735348cc9ed8a2", 
+"ed0ae1a8c793c39134dca6625ec44839349e669e43f7492973b67f79e68184f1", 
+"eee431466a3f084d7121812e4d5365c545122b214fb8c4b3dffa21fcc0660d2c", 
+"f3bf6d46b1c7bfb92019e7e12528614bcd16d74e1eb6c2d9b052fea961041a83", 
+"f3e7c69e13e91fb61c68008ba3ae3296056945748821f8bff7b3ac3da668bb72", 
+"f42baf781aced50f5e3af8c93b0024dfc67c9b64fc69a7477bdcbb973de38aeb", 
+"fb568c71e4a454b73217e6b314aea4ff9e8f146801307e886722383b760f1ee3", 
+"fc4fea2a86852f5056910d4dca50dcfb3b68c084ecacc9180879b788e599bcc3", 
+"fcc69a0efcecaf2536490389a424da8ab2a6d1f95639b287419d66810a9b29f1", 
+"fdda0db48ea9ef00687c3c8b5a6c77f25b05bfe7049cea2dd823a877c298f83b", 
+"fe00a8a871cb190708a7f4b405c527e2668ae27c666c0b57de975c286e252700"
+)
+
+
+ppoo_clus_pre_pam_om2_m_clasificaciones_sin_asw_neg<-
+df_filled2[, c("run", "glosa_pueblo_originario")]|>
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|>
+  mutate(glosa_pueblo_originario_rec = if_else(
+ glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO", glosa_pueblo_originario
+  )) |>
+  filter(!run %in% run_aws_neg_m_c2) |> 
+  group_by(run, clus_pam_om2) |>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om2, show_na = T)
+
+janitor::adorn_percentages(ppoo_clus_pre_pam_om2_m_clasificaciones_sin_asw_neg, "row") |> 
+  mutate_if(is.numeric, ~round(.*100, 1)) |> 
+  knitr::kable("markdown", caption="Otra forma de clasificación PPOO con reporte vs. conglomerados (por fila) (excluye ASW neg)")
+
+cat("Fisher test (menos los -ASWs)\n")
+janitor::fisher.test(ppoo_clus_pre_pam_om2_m_clasificaciones_sin_asw_neg, simulate.p.value=T, B=1e5)
+#p-value = 0.00086
+
+invisible("The Bonferroni corrected significant level for Exact approach is: 0.05/(R*C)=0.00625")
+invisible("Para Otros reportados (no mapuche) p-value 0.01 en basado en residuo estandarizado, ajustado, y en la aproximación exacta, menor en TUS")
+invisible("Para Mapuche p-value 0.03-0.05 en basado en aproximación exacta, residuo ajustado y estandarizado, respectivamente, de que es más alto proporción en TUS")
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
 ppoo_clus_pre_pam_om2_m<-
   df_filled2[,c("run","glosa_pueblo_originario")]|> 
   dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2","factor_inclusivo_real_hist_mas_autperc")], by="run", multiple="first")|> 
@@ -293,8 +941,8 @@ reshape2::melt(ppoo_clus_pre_pam_om2_m, id.vars = "glosa_pueblo_originario_rec")
 ggplot(aes(x = glosa_pueblo_originario_rec, y = value, fill = variable)) + 
   geom_bar(stat = "identity", position = "fill") + 
   scale_fill_manual(values =  c(#, al menos un TSM(2)
-  "6623, Un trimestre, TSM y Comorbilidad(2)" = "#D2B48C", 
-  "6612, Un trimestre TSM(1)" = "#E27A5B"
+  "6623, Primer mes, TSM y Comorbilidad(2)" = "#D2B48C", 
+  "6612, Primer mes TUS(1)" = "#E27A5B"
 )) +
   labs(title = NULL,
        x = "Grupo Étnico",
@@ -355,7 +1003,7 @@ seq_plot_pam_om2_m <- ggseqplot::ggseqiplot(States_Wide.seq_month_t_prim_adm_cen
                                  group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,
                                  facet_ncol=1, facet_nrow=2, sortv=sil_pam_om_clus2_m) +
   theme(legend.position = "none")+
-  labs(x="Trimestres", y="# IDs de usuarios")+
+  labs(x="Meses", y="# IDs de usuarios")+
   #guides(fill = guide_legend(nrow = 1))+
   theme(
     panel.spacing = unit(0.1, "lines"),  # Reduce el espaciado entre los paneles
@@ -405,7 +1053,7 @@ seq_plot2_pam_om2_m <- ggseqdplot(States_Wide.seq_month_t_prim_adm_cens,
                                  group= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,
                                  facet_ncol=1, facet_nrow=2) +
   theme(legend.position = "none")+  # Colocar la leyenda abajo
-  labs(x="Trimestres", y="Frecuencia relativa de estados")+
+  labs(x="Meses", y="Frecuencia relativa de estados")+
   theme(
     panel.spacing = unit(0.1, "lines"),
     axis.text.y = element_text(size = 15),           # Tamaño de las etiquetas de los grupos étnicos
@@ -419,7 +1067,7 @@ seq_plot2_pam_om2_m <- ggseqdplot(States_Wide.seq_month_t_prim_adm_cens,
     #legend.key.size = unit(1.5, "lines"),        # Aumenta el tamaño de los símbolos en la leyenda    
   )  # Colocar la leyenda abajo
 seq_plot2_pam_om2_m
-ggsave("_figs/clusterspam_om22_m_mod.png",seq_plot2_pam_om2_m, width = 11, height = 5.5, dpi=1000)
+ggsave("_figs/clusterspam_om22_m_mod_25.png",seq_plot2_pam_om2_m, width = 11, height = 5.5, dpi=1000)
 
 
 table_data_pam_om2_m <- sprintf("%1.2f",pamRange_month_om$stats[1,])
@@ -503,7 +1151,7 @@ trim_tasa_pam_om2_m_cens_rate|>
   geom_tile() +
   coord_flip()+
   scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
-  labs(title = "Tasas de transición, Trimestre (s/censura)",
+  labs(title = "Tasas de transición, Mes (s/censura)",
        x = "Desde",
        y = "Hacia",
        fill = "Rate") +
@@ -565,7 +1213,7 @@ trim_tasa2_pam_om2_m_cens_rate|>
   geom_tile() +
   coord_flip()+
   scale_fill_gradient(low = "white", high = "blue") + # Ajusta la escala de colores según tus preferencias
-  labs(title = "Tasas de transición, Trimestre (s/censura)",
+  labs(title = "Tasas de transición, Mes (s/censura)",
        x = "Desde",
        y = "Hacia",
        fill = "Rate") +
@@ -640,7 +1288,7 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
   dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n), accuracy=.1),")"))|>
   dplyr::select(-n)|>
   tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc, values_from = n_prop, values_fill = "0")|> 
-  knitr::kable("markdown", col.names=c("Conglomerados","No se identifica/no pertenece", "No se identifica/hay reconocimiento", "Se identifica/hay reconocimeinto"), caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO")
+  knitr::kable("markdown", col.names=c("Conglomerados","No se identifica/no pertenece", "No se identifica/hay reconocimiento", "Se identifica/hay reconocimeinto"), caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO") # leve mayor identificación y reconocimiento en TUS
 ```
 
 Vemos las categorías de clasificación de PPOO según autopercepción (en MINSAL y en RSH) y reconocimiento CONADI.
@@ -655,12 +1303,24 @@ Vemos las categorías de clasificación de PPOO según autopercepción (en MINSA
 #| results: "hold"
 
 chisq_cramerv(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2))
-#X-squared = 3.5602, df = 2, p-value = 0.1686
+# $chisq_statistic
+# [1] "3.83"
+# 
+# $chisq_df
+# df 
+#  2 
+# 
+# $chisq_p_value
+# [1] "0.1471"
+# 
+# $cramers_v
+# [1] "0.02"
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om2))
+with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m) , table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om2))
 )
+#[1] "0.1532"
 ```
 
 No se constata una asocaición entre autoidentificación/reconocimiento perteneciente a PPOO y la pertenencia a conglomerados.
@@ -690,13 +1350,14 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
     dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1))|> 
     janitor::tabyl(factor_inclusivo_real_hist_mas_autperc_bin,clus_pam_om2)|>
     janitor::chisq.test()
-#X-squared = 2.0428, df = 1, p-value = 0.1529
+#X-squared = 2.9179, df = 1, p-value = 0.0876
 #
 #
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(factor_inclusivo_real_hist_mas_autperc_bin , clus_pam_om2))
-)
+  with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m) , table(factor_inclusivo_real_hist_mas_autperc_bin, clus_pam_om2))
+)# [1] "0.0938"
+
 ```
 
 Tampoco se observa asociación alguna. Hicimos una prueba post-hoc usando Bonferroni
@@ -739,23 +1400,24 @@ surv_obj <- Surv(time = ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide
 
 cat("sin siluetas negativas")
 # Realizar el análisis de Log-Rank (survdiff)
- survdiff(Surv(death_time, ifelse(death_time==60,0,1)) ~ clus_pam_om2,
-                      data = subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m))
-
 survdiff(surv_obj ~ clus_pam_om2,
                       data = ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)
-
+# Chisq= 9.1  on 1 degrees of freedom, p= 0.003 
+ survdiff(Surv(death_time, ifelse(death_time==60,0,1)) ~ clus_pam_om2,
+                      data = slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m) )
+# Chisq= 8.9  on 1 degrees of freedom, p= 0.003 
+ 
 # Ajustar el modelo de Kaplan-Meier
 km_fit <- survfit(surv_obj ~ clus_pam_om2,
                   data = ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens)
 
 # Extraer los datos del modelo Kaplan-Meier para usar con ggplot
-km_data <- data.frame(
+km_data_m <- data.frame(
   time = km_fit$time,
   surv = km_fit$surv,
   upper = km_fit$upper,
   lower = km_fit$lower,
-  strata = rep(c("6035, Un trimestre, al menos un TSM(2)","6025, Un trimestre, TUS(1)"), km_fit$strata)
+  strata = rep(c("6623, Primer mes, TSM y Comorbilidad(2)","6612, Primer mes TUS(1)"), km_fit$strata)
 )
 
 biostat3::survRate(Surv(time = death_time,
@@ -763,10 +1425,10 @@ biostat3::survRate(Surv(time = death_time,
                    data= ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens) |> 
     dplyr::mutate(across(c("rate", "lower", "upper"),~sprintf("%1.2f",.*10000))) 
 
-epitools::rateratio.midp(c(14 , 56,  41524.93 , 317961.85))
+epitools::rateratio.midp(c(21 , 78,  45240.02 , 348073.88))
 
 # Crear el gráfico de Kaplan-Meier con ggplot2
-ggplot(km_data, aes(x = time, y = surv, color = strata)) +
+ggplot(km_data_m, aes(x = time, y = surv, color = strata)) +
   geom_step(size = 1.2) +  # Curvas de supervivencia
   geom_ribbon(aes(ymin = lower, ymax = upper, fill = strata), alpha = 0.2, color = NA) +  # Intervalos de confianza
   labs(
@@ -795,19 +1457,33 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
              dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1))|> 
              janitor::tabyl(death_time_rec,clus_pam_om2)|> 
               janitor::chisq.test(correct=T)
-#X-squared = 11.293, df = 6, p-value = 0.07972
+#X-squared = 8.1148, df = 1, p-value = 0.00439
 
 ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|> 
              dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1))|> 
              janitor::tabyl(death_time_rec,clus_pam_om2)|> 
               janitor::fisher.test(simulate.p.value=T, B=1e5)
-#p-value = 0.04477
+# odds ratio 
+#   2.079773 
+#p-value = 0.006252
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)|> 
+with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)|> 
              dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)), table(death_time_rec , clus_pam_om2))
 )
+# $chisq_statistic
+# [1] "7.98"
+# 
+# $chisq_df
+# df 
+#  1 
+# 
+# $chisq_p_value
+# [1] "0.0047"
+# 
+# $cramers_v
+# [1] "0.04"
 
 #_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
 ##_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_#_
@@ -818,25 +1494,10 @@ tab_cl_mortalidad_pam_om2_m<-
   as.matrix(ncol=2)
 
 labels_pam_om2_m <- c(
-  "6035, Un trimestre, TSM(2)",
-  "6025, Un trimestre, TUS(1)"
+  "6623, Primer mes, TSM y Comorbilidad(2)",
+  "6612, Primer mes TUS(1)"
 )
-# Realizar el análisis y crear la tabla directamente
-pairwise.prop.test(t(tab_cl_mortalidad_pam_om2_m[,2:ncol(tab_cl_mortalidad_pam_om2_m)]), p.adjust.method = "holm")$p.value |>
-  as.table() |>
-  as.data.frame() |>
-  rename(Grupo_1 = Var1, Grupo_2 = Var2, p_value = Freq) |>
-  filter(!is.na(p_value)) |>
-  mutate(
-    Grupo_1 = labels_pam_om2_m[as.numeric(Grupo_1)],
-    Grupo_2 = labels_pam_om2_m[as.numeric(Grupo_2)],
-    p_value = ifelse(p_value <.001, "<.001", sprintf("%1.3f",p_value)) 
-  ) |>
-  kable(
-    col.names = c("Grupo 1", "Grupo 2", "Valor p ajustado"),
-    align = "l",
-    caption= "Corrección parcial por comparaciones múltiples (Holm–Bonferroni)"
-  )
+
 ```
 
 Se constata una asociación muy modesta entre la pertenencia a un conglomerado y mortalidad, siendo 6025, Un trimestre, TUS(1)	mayores sus chances de mortalidad.
@@ -852,9 +1513,12 @@ Se constata una asociación muy modesta entre la pertenencia a un conglomerado y
 #| eval: true
 #| paged.print: true
 #| results: "hold"
-chisq_cramerv(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base))
+
+chisq_cramerv(with(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, 
+  table(clus_pam_om2,codigo_region_rec_base)
+  ))
 # $chisq_statistic
-# [1] "26.58"
+# [1] "32.05"
 # 
 # $chisq_df
 # df 
@@ -868,9 +1532,10 @@ chisq_cramerv(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_ce
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(codigo_region_rec_base , clus_pam_om2))
+with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m), table(codigo_region_rec_base , clus_pam_om2))
 )
-
+# $chisq_p_value
+# [1] "<0.001"
 
 table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)|> 
     data.frame() |>  
@@ -883,26 +1548,6 @@ table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om
     tidyr::pivot_wider(names_from="Var2",values_from="fp")  |> 
   knitr::kable("markdown", caption="Frecuencias absolutas y relativas por fila", col.names= c("Conglomerados", "Fuera de RM", "En RM"))
 ```
-
-Al parecer, el conglomerado 6025, Un trimestre, TUS(1) tendría una proporción significativamente mayor que el resto de pacientes fuera de la RM, aunque con una fuerza de asociación débil.
-
-```{r 21n-comp-cov-RMnoRM_c, class="scrollable-code"}
-chisq.posthoc.test(
-table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)
-)|> 
-  dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3))|> 
-  dplyr::filter(Dimension=="6025, Un trimestre, TUS(1)") |> 
-  #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")|>
-  group_by(Dimension)|>
-  summarise(across(2:(ncol(.)-1),
-                   ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")")))|>
-  dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.))|> 
-  #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.))|> 
-  #dplyr::mutate(Dimension= tab_clus_macrozona_pam_om4_q[1])|> 
-  knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-RM vs. No-RM")
-```
-
-De la tabla anterior, se observa que participantes pertenecientes al conglomerado "6025, Un trimestre, TUS(1)" presenta una menor proporción de residentes de la Región Metropolitana.
 
 
 ##### 2.1.3.e. Comparación covariables- Región
@@ -952,14 +1597,13 @@ data.frame(
 
 dplyr::mutate(tab_cluster_region_pam_om2_m, promedio_fila = rowMeans(across(2:length(colnames(tab_cluster_region_pam_om2_m)))))|> 
   dplyr::arrange(desc(promedio_fila))|> 
-  dplyr::left_join(cod_reg_homo_pam_om7_q, by="codigo_region")|> 
+  dplyr::left_join(cod_reg_homo_pam_om2_m, by="codigo_region")|> 
   dplyr::select(codigo_region, nombre_region, everything())|> 
   dplyr::select(-promedio_fila)|> 
   dplyr::mutate_at(3:(length(colnames(tab_cluster_region_pam_om2_m))+1),~scales::percent(.))|> 
   knitr::kable(caption="Porcentaje por región")
 ```
 
-A partir de la tabla, salta a la vista un importante porcentaje de pacientes clasificados en el conglomerado 6025, Un trimestre, TUS (19% vs. 6%) que fue atendido en la Región de Los Lagos y en la Región de Valparaíso (12% vs. 8%). 
 
 
 ```{r 21o-comp-cov-reg2a}
@@ -996,10 +1640,11 @@ janitor::fisher.test(tab_clus_reg_pam_om2_m, simulate.p.value=T, B=1e5)
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens , !rn %in% sil_neg_pam_om_clus2_m)|> 
+with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)|> 
        dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))|>
     dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") , table(codigo_region , clus_pam_om2))
-)
+)#[1] "<0.001"
+
 ```
 
 Se encuentra una asociación significativa aunque débil entre región y conglomerados.
@@ -1046,7 +1691,7 @@ chisq_cramerv(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[,-1])
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)|> 
+with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)|> 
        dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))|>
   dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
                     by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first")|> 
@@ -1058,7 +1703,8 @@ dplyr::mutate(macrozona = dplyr::case_when(
   codigo_region %in% c(11, 12) ~ "Macrozona Austral",
   TRUE ~ "RM"  # En caso de que algún código no esté especificado
 )) |> dplyr::filter(macrozona!="RM") , table(macrozona, clus_pam_om2))
-)
+)#[1] "<0.001"
+
 
 cat("Descriptivos")
 dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")|>
@@ -1067,10 +1713,6 @@ dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")|>
   dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.1f%%)", dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[[cur_column()]], . * 100))) |> 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. macrozona")
 ```
-
-Hay una asociación significativa aunque débil entre macrozona y pertenencia a cluster.
-
-El conglomerado 6025, Un trimestre, TUS (1) concentra un porcentaje reducido en la Macrozona Centro (9% vs. 13%). Por otro lado, pacientes en 6025, Un trimestre, TUS (1) pertenecen en mayor proporción a la Macrozona Sur (26% vs. 14%), aunque menor en la Macrozona Norte (4% vs. 8%).
 
 
 <div class="scrollable-content">
@@ -1084,15 +1726,16 @@ El conglomerado 6025, Un trimestre, TUS (1) concentra un porcentaje reducido en 
 #| paged.print: true
 #| results: "hold"
 
-chisq.posthoc.test(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[-1])|> 
-  dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3))|> 
-  #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")|>
+
+chisq.posthoc.test(dplyr::filter(tab_clus_macrozona_pam_om2_m, macrozona != "RM")[-1])|>
+  (\(df) {dplyr::mutate_at(df, 3:ncol(df), ~ round(as.numeric(gsub("\\*", "", .)), 3))})()|>
   group_by(Dimension)|>
-  summarise(across(2:(ncol(.)-1),
-                   ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")")))|>
-  dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.))|> 
-  dplyr::mutate(Dimension= dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[1])|> 
-  knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Macrozona")
+  (\(df) {summarise(df, across(2:(ncol(df) - 1), ~paste0(first(sprintf("%1.2f", .)), " (p=", last(sprintf("%1.3f", .)), ")")))})()|>
+  (\(df) {dplyr::mutate_at(df, 2:length(names(df)), ~gsub("p\\=0.000)", "p<0.001)", .))})()|>
+  dplyr::mutate(Dimension= dplyr::filter(tab_clus_macrozona_pam_om6_q, macrozona!="RM") |> pull(macrozona))|>
+  mutate(Dimension = factor(Dimension, levels = c("Macrozona Norte", "Macrozona Centro", "Macrozona Centro Sur", "Macrozona Sur", "Macrozona Austral")))|> 
+  arrange(Dimension)|>
+  knitr::kable("markdown", caption = "Comparación post-hoc, conglomerado-Macrozona")
 ```
 </div>
 
@@ -1109,12 +1752,10 @@ chisq.posthoc.test(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[-
 #| 
 pairwise_chisq_gof_test(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[-1], p.adjust.method="holm")|>
   knitr::kable("markdown", caption="Dependencia categórica sol. 2 conglomerados (mensual), por pares de categorías en Macrozona (corrección Holm-Bonferroni)")
-
+#0	****
 #Groups sharing a letter are not significantlt different (alpha = 0.05)
 ```
 </div>
-
-Las pruebas post-hoc muestran que un mayor porcentaje de pacientes clasificados en 6035, un trimestre, al menos un TSM(2) se concentran en la macrozona norte y menos en la macrozona sur y centro. En cambio, 6025, Un trimestre, TUS(1) concentra un mayor porcentaje en la macrozona sur y centro, mientras que menos en la macrozona norte.
 
 
 ##### 2.1.3.f. Comparación covariables- Sexo
@@ -1134,7 +1775,7 @@ tab_clus_sexo_pam_om2_m<-
 
 chisq_cramerv(tab_clus_sexo_pam_om2_m[,-1])
 # $chisq_statistic
-# [1] "191.47"
+# [1] "205.87"
 # 
 # $chisq_df
 # df 
@@ -1147,49 +1788,20 @@ chisq_cramerv(tab_clus_sexo_pam_om2_m[,-1])
 # [1] "0.18"
 #  
 cat("Descartando valores negativos en sil width")
-chisq_cramerv(with(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m), table(glosa_sexo, clus_pam_om2))
-)
+chisq_cramerv(with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m), table(glosa_sexo, clus_pam_om2))
+)#$chisq_p_value
+#[1] "<0.001"
 
-tab_clus_sexo_pam_om2_m|> 
-  janitor::adorn_percentages("col")|> 
-  janitor::adorn_rounding(digits = 3)|> 
+tab_clus_sexo_pam_om2_m|>
+  janitor::adorn_percentages("col")|>
+  janitor::adorn_rounding(digits = 3)|>
   dplyr::mutate(across(-glosa_sexo, ~sprintf("%d (%.1f%%)", tab_clus_sexo_pam_om2_m[[cur_column()]],.*100)))|> 
-  #dplyr::mutate_at(2:ncol(.),~scales::percent(.))|> 
-  knitr::kable(caption="Porcentajes por columna, conglomerado vs. sexo")
+  (\(df) {
+        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|>  slice(2) |> rio::export("clipboard")}
+        knitr::kable(df, "markdown", caption="Porcentajes por columna, conglomerado vs. sexo")
+      })()
 ```
 
-Hay una asociación con una fuerza débil-moderada entre la pertenencia a un conglomerado y el sexo. Entre pacientes clasificados a 6025, Un trimestre, TUS(1) hay un menor porcentaje de mujeres (30% vs. 57%).
-
-
-```{r 21s-comp-cov-sex2}
-#| message: true
-#| include: true
-#| warning: false
-#| error: true
-#| eval: true
-#| paged.print: true
-#| results: "hold"
-chisq.posthoc.test(tab_clus_sexo_pam_om2_m[-1])|> 
-    dplyr::mutate(Dimension= rep(c("HOMBRE", "MUJER"), each=2))|> 
-    dplyr::filter(Dimension=="MUJER")|>
-    dplyr::mutate(across(3:ncol(.), ~ dplyr::case_when(Value=="Residuals"~ sprintf("%1.2f", as.numeric(.)), Value=="p values"~ sprintf("%1.3f", as.numeric(gsub("\\*","",.))))))|> 
-  dplyr::mutate(across(3:ncol(.), ~ dplyr::case_when(Value=="p values" & .=="0.000"~"<0.001",T~.)))|> 
-  knitr::kable("markdown", caption="Post-hoc, conglomerado vs. sexo")
-```
-
-```{r 21s-comp-cov-sex3}
-#| message: true
-#| include: true
-#| warning: false
-#| error: true
-#| eval: true
-#| paged.print: true
-#| results: "hold"
-pairwise_chisq_gof_test(tab_clus_sexo_pam_om2_m[-1], p.adjust.method="holm")|> 
-  dplyr::mutate(p= dplyr::case_when(p<0.001~ "<0.001",T~ sprintf("%1.3f",p)))|> 
-  dplyr::mutate(p.adj= dplyr::case_when(p.adj<0.001~ "<0.001",T~ sprintf("%1.3f",p.adj)))|> 
-  knitr::kable("markdown", caption="Dependencia categórica sol. 2 conglomerados (mensual), por pares de categorías en Sexo (corrección Holm-Bonferroni)") 
-```
 
 
 ##### 2.1.3.g. Comparación covariables- Edad
@@ -1270,7 +1882,7 @@ ggplot(aes(x = clus_pam_om2, y = mean_edad)) +
     legend.key.height = unit(1, "cm"),  
     legend.text = element_text(size = 15, face = "bold")            # Tamaño del texto de la leyenda
   ) 
-ggsave("_figs/edad_minima_por_cluster_pam_om2_m.png", dpi=600)
+ggsave("_figs/edad_minima_por_cluster_pam_om2_m_25.png", dpi=600)
 ```
 
 ```{r 21u-anova-edad}
@@ -1292,29 +1904,30 @@ t.test(min_edad_anos ~ clus_pam_om2,
 dt_ing_calendar_month_t_desde_primera_adm_dedup|>
     dplyr::filter(month == 0)|>
     dplyr::inner_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om2")], by = "run")|>
-  {
-    effsize::cohen.d(
-     .$min_edad_anos,
-     .$clus_pam_om2)
-  }
-# d estimate: -0.4448548 (small)
+   (\(df) {
+        effsize::cohen.d(
+     df$min_edad_anos,
+     df$clus_pam_om2)
+      })()
+  
+# d estimate: -0.4164028 (small)
 # 95 percent confidence interval:
 #      lower      upper 
-# -0.5240079 -0.3657017 
+# -0.4919251 -0.3408805 
+
 
 cat("Descartando valores negativos en sil width")
 dt_ing_calendar_month_t_desde_primera_adm_dedup|>
     dplyr::filter(month == 0)|>
-    dplyr::inner_join(subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)[,c("run","clus_pam_om2")], by="run")|>
-  {
-    cohen.d(
-     .$min_edad_anos,
-     .$clus_pam_om2)
-  }
+    dplyr::inner_join(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)[,c("run","clus_pam_om2")], by="run")|>
+   (\(df) {
+    effsize::cohen.d(
+     df$min_edad_anos,
+     df$clus_pam_om2)
+  })()
 
 ```
 
-Los resultados del test de Welch indicaron que la diferencia de medias entre el conglomerado 6035, un trimestre, al menos un TSM(2) (𝑀 = 20.5) y el grupo 6025, Un trimestre, TUS(1) (𝑀=22.5) fue estadísticamente significativa,𝑡(6036)=−11.07 𝑝<0.001, con un intervalo de confianza del 95% de [−2.56,−1.58]. y un tamaño del efecto pequeño (Cohen D= -0.46).
 
 
 ##### 2.1.3.h. Comparación covariables- Previsión
@@ -1333,22 +1946,37 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
     janitor::tabyl(prev_benef_rec_post, clus_pam_om2)
 
 tab_clus_prev_pam_om2_m|> 
-  {
-     print(janitor::chisq.test(.))
-     print(janitor::fisher.test(., simulate.p.value = T, B = 1e5))
-  }
-#X-squared = 11.459, df = 4, p-value = 0.02186
-#p-value = 0.01693
+     (\(df) {
+     print(janitor::chisq.test(df))
+     print(janitor::fisher.test(df, simulate.p.value = T, B = 1e5))
+  })()
+
+#X-squared = 15.684, df = 4, p-value = 0.003474
+#p-value = 0.00189
 
 chisq_cramerv(tab_clus_prev_pam_om2_m[-1])
-
-subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)|>
+# $chisq_statistic
+# [1] "15.68"
+# 
+# $chisq_df
+# df 
+#  4 
+# 
+# $chisq_p_value
+# [1] "0.0035"
+# 
+# $cramers_v
+# [1] "0.05"
+slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)|>
     janitor::tabyl(prev_benef_rec_post, clus_pam_om2)|> 
-  {
-     print(chisq_cramerv(.[-1]))
-      print(janitor::chisq.test(.))
-     print(janitor::fisher.test(., simulate.p.value = T, B = 1e5))
-  }
+     (\(df) {
+     print(chisq_cramerv(df[-1]))
+      print(janitor::chisq.test(df))
+     print(janitor::fisher.test(df, simulate.p.value = T, B = 1e5))
+  })()
+# $chisq_p_value
+# [1] "0.0024"
+#p-value = 0.00147
 
 tab_clus_prev_pam_om2_m|> 
   janitor::adorn_percentages("col")|> 
@@ -1357,25 +1985,6 @@ tab_clus_prev_pam_om2_m|>
   #dplyr::mutate_at(2:ncol(.),~scales::percent(.))|> 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. Beneficios")
 ```
-
-
-```{r 21v-prevision-a2}
-
-chisq.posthoc.test(tab_clus_prev_pam_om2_m[-1])|> 
-    dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3))|> 
-    #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")|>
-    group_by(Dimension)|>
-    summarise(across(2:(ncol(.)-1),
-                     ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")")))|>
-    dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.))|> 
-    #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.))|> 
-    dplyr::mutate(Dimension= dplyr::pull(tab_clus_prev_pam_om2_m[1]))|> 
-    knitr::kable("markdown", caption="Comparación post-hoc, conglomerado- Previsión")
-```
-
-
-La asociación es levemente significativa y muy débil. Pacientes clasificados en 6035, un trimestre, al menos un TSM(6) presenta un mayor porcentaje de pacientes en este conglomerado en una previsión de FFAA. Con todo, esta asociación no es consistente en las distintas pruebas.
-
 
 ##### 2.1.3.i. Comparación covariables- Niv. Complejidad
 
@@ -1400,17 +2009,20 @@ chisq_cramerv(tab_clus_compl_pam_om2_m[-1])
 janitor::chisq.test(tab_clus_compl_pam_om2_m)
 
 cat("Sin siluetas negativas")
-subset(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus2_m)|> 
+slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)|> 
   dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))|>
   dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], 
                     by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first")|> 
   janitor::tabyl(nivel_de_complejidad, clus_pam_om2)|> 
-  {
-          print(chisq_cramerv(.[-1]))
-         print(janitor::chisq.test(.))
-         print(janitor::fisher.test(., simulate.p.value = T, B = 1e5))   
-  
-  }
+  (\(df) {
+          print(chisq_cramerv(df[-1]))
+         print(janitor::chisq.test(df))
+         print(janitor::fisher.test(df, simulate.p.value = T, B = 1e5))   
+  })()
+# $chisq_p_value
+# [1] "<0.001"
+# X-squared = 46.192, df = 4, p-value = 2.247e-09
+# p-value = 1e-05
 
 tab_clus_compl_pam_om2_m|> 
   janitor::adorn_percentages("col")|> 
@@ -1431,18 +2043,20 @@ tab_clus_compl_pam_om2_m|>
 #| results: "hold"
 
 chisq.posthoc.test(tab_clus_compl_pam_om2_m[-1])|> 
-    dplyr::mutate_at(3:ncol(.), ~round(as.numeric(gsub("\\*","",.)),3))|> 
-    #knitr::kable("html", caption="Comparación post-hoc, conglomerado-región")|>
-    group_by(Dimension)|>
-    summarise(across(2:(ncol(.)-1),
-                     ~ paste0(first(sprintf("%1.2f",.)), " (p=", last(sprintf("%1.3f",.)), ")")))|>
-    dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=0.000)","p<0.001)",.))|> 
-    #dplyr::mutate_at(2:length(names(.)), ~gsub("p\\=1)","p=1.000)",.))|> 
-    dplyr::mutate(Dimension= dplyr::pull(tab_clus_compl_pam_om2_m[1]))|> 
-    knitr::kable("markdown", caption="Comparación post-hoc, conglomerado-Niv. complejidad")
+ (\(df) dplyr::mutate(df, across(3:ncol(df), ~round(as.numeric(gsub("\\*","",.x)),3))))()|>
+  # knitr::kable("html", caption="Comparación post-hoc, conglomerado-región") |>
+  (\(df) dplyr::group_by(df, Dimension))()|>
+  (\(df) dplyr::summarise(df, across(2:(ncol(df) - 1), ~paste0(first(sprintf("%1.2f", .x)), " (p=", last(sprintf("%1.3f", .x)), ")"))))()|>
+  (\(df) dplyr::mutate(df, across(2:length(names(df)), ~gsub("p=0.000)", "p<0.001)",.x))))()|>
+  ungroup()|> 
+  dplyr::mutate(Dimension = dplyr::pull(tab_clus_compl_pam_om2_m[1]))|>
+  mutate(Dimension = factor(Dimension, levels = c("Alta Complejidad", "Mediana Complejidad", "Baja Complejidad", "Pendiente", "Sin dato")))|> 
+  arrange(Dimension)|>
+  (\(df) {
+    if (interactive()) {mutate(df, across(-Dimension, ~ gsub("\\(|\\)", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+    knitr::kable(df, "markdown", caption="Comparación post-hoc, conglomerado-Niv. complejidad")
+  })() 
 ```
-
-A partir de la tabla de contingencia y la prueba de residuos, se observa que 6025, Un trimestre, TUS(1) presenta un mayor porcentaje en establecimientos de Alta complejidad (68% vs. 61%) y menores porcentajes en Mediana complejidad (12% vs. 20%) y mayor porcentaje de casos con calificación Pendiente (3% vs. 1%). 
 
 
 
@@ -1453,7 +2067,7 @@ A partir de la tabla de contingencia y la prueba de residuos, se observa que 602
 #| include: true
 #| warning: false
 #| error: false
-#| eval: true
+#| eval: false
 #| fig.show: "hold"
 #| fig.align: "center"
 #| paged.print: true
@@ -1523,7 +2137,7 @@ ggplot(aes(x = Variable, y = Grupo, fill = Asociación)) +
   ) +
   coord_flip()
 
-ggsave("_figs/asociaciones_pam_om2_m.png", width=8.8*.8, height=5*.8, dpi=1000)
+ggsave("_figs/asociaciones_pam_om2_m_25.png", width=8.8*.8, height=5*.8, dpi=1000)
 
 ```
 
@@ -1538,7 +2152,7 @@ cat(paste0("Date: ",withr::with_locale(new = c('LC_TIME' = 'C'), code =Sys.time(
 cat(paste0("Editor context: ", getwd()))
 cat("quarto version: "); system("quarto --version") 
 
-save.image("avance250117_3.RData")
+save.image("avance250117_3_25.RData")
 ```
 
 

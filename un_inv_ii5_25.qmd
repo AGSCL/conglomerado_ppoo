@@ -49,12 +49,12 @@ rm(list=ls());gc()
 while(!dev.cur())dev.off()
 cat("\014")
 
-if(Sys.info()["sysname"]=="Windows"){
- folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
-                       "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
-                       "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
-} else {folder_path <- ""}
-load(paste0(folder_path,"avance25011725_pre_25.RData"))
+# if(Sys.info()["sysname"]=="Windows"){
+#  folder_path <- ifelse(dir.exists("H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/"),
+#                        "H:/Mi unidad/PERSONAL ANDRES/UCH_salud_publica/asignaturas/un_inv_II/",
+#                        "C:/Users/CISS Fondecyt/Mi unidad/Alvacast/SISTRAT 2022 (github)/_proposal_grant/2023/")
+# } else {folder_path <- ""}
+load(paste0(getwd(),"/","avance25011725_pre_25.RData"))
 ```
 
 
@@ -1743,7 +1743,7 @@ Luego vemos la clasificación de PPOO por cluster
 #| eval: true
 #| paged.print: true
 
-
+cat("Traemos la base de datos con todos los clasificados como PPOO\n")
 filtered_df_csv <- readr::read_csv("filtered_df.csv", col_types = readr::cols(...1 = readr::col_skip()))
 colnames(filtered_df_csv)<- c("rn", "run")
 nrow(filtered_df_csv)
@@ -1793,8 +1793,24 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi)
 # 1  754  425
 rm(ci_cya_conadi)
 
-cat("Proporción")
-0.08481739
+
+scales::percent(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010,
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi)[[4]] / nrow(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens), accuracy=.1)
+
+cat("CONADI y 2005- MINSAL/ RSH: \n")
+scales::percent(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010,
+      ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi)[[4]]/ nrow(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens), accuracy=.1)
+
+cat("Al menos uno (inclusivo): \n")
+scales::percent(1-(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010,
+      ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi)[[1]]/ nrow(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens)), accuracy=.1)
+
+
+cat("Sólo en RSH o MINSAL 2005- : \n")
+scales::percent(sum(table(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010,
+      ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi)[c(2,4)])/ nrow(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens), accuracy=.1)
+
+
 
 cat("ASociación con pertenencia a conglomerados, nueva agrupación\n")
 janitor::chisq.test(df_filled2[,c("run","glosa_pueblo_originario")] |> 
@@ -1843,6 +1859,9 @@ seqCompare(States_Wide.seq_quarter_t_prim_adm, group=ing_dt_ing_calendar_quarter
 # [1,] 3.214252 0.09793892   0.21852           1.456759                    1.115452
 # 
 
+
+#dt_df_filled2 #se supone que en este se eliminan los registros otros del primer evento hosp no TUS/MH
+#también lo hace para mi base según un_inv_ii2_25.qmd
 glosa_pueblo_originario_rec <- 
   df_filled2[, c("run", "glosa_pueblo_originario")] |> 
   left_join(
@@ -1872,13 +1891,46 @@ glosa_pueblo_originario_rec <-
   ) |> 
   pull(sum_bin_ppo)
 
+glosa_pueblo_originario_rec2 <- 
+  ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4", "ppoo_minsal_y_rsh_2010", "ci_cya_conadi")] |> 
+  left_join(
+    df_filled2[, c("run", "glosa_pueblo_originario")],
+    by = "run",
+    multiple = "first"
+  ) |> 
+  mutate(
+    glosa_pueblo_originario_rec = case_when(
+      glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO",
+      glosa_pueblo_originario == "NINGUNO" ~ "NINGUNO",
+      grepl("RAPA|MAPU", glosa_pueblo_originario) ~ "RAPA NUI o MAPUCHE",
+      TRUE ~ "RESTO"
+    ),
+    pueblo_bin = case_when(
+      glosa_pueblo_originario_rec == "RAPA NUI o MAPUCHE" ~ "Mapuche o Rapa Nui",
+      glosa_pueblo_originario_rec %in% c("DESCONOCIDO", "NINGUNO", "RESTO") ~ "Otro o ninguno"
+    )
+  ) |> 
+  group_by(run) |> 
+  summarise(
+    sum_ppoo = sum(grepl("Mapuche o Rapa Nui", pueblo_bin)),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    sum_bin_ppo = ifelse(sum_ppoo > 0, 1, 0)
+  ) |> 
+  pull(sum_bin_ppo)
+
+
+cat("Qué ocurre si utilizamos la claisficación del primer eventos hospitalarios en vez de cualquier desde 2018 en adelante?")
+round(prop.table(table(glosa_pueblo_originario_rec2, glosa_pueblo_originario_rec),2)*100,1)
+
+print("Estaríamos elimnando un 18% de casos de registros en otro momento")
+
 glosa_pueblo_originario_rec_num<-as.numeric(factor(glosa_pueblo_originario_rec))-1
 
 seqcompare_ppoo_quarter_om_ppoo_rec<-
 TraMineRextras::seqCompare(States_Wide.seq_quarter_t_prim_adm, group=glosa_pueblo_originario_rec_num, method="OM", sm=costmatrix_quarter, seed= 2125, s=1e1, stat="all")# s= Integer. Default 100. The size of random samples of sequences. When 0, no sampling is done.
 
-
- 
 ```
 
 Generamos un gráfico de PPOO por cada conglomerado.
@@ -1889,13 +1941,6 @@ Generamos un gráfico de PPOO por cada conglomerado.
 #| warning: false
 #| error: false
 #| eval: true
-#| fig.show: "hold"
-#| fig.align: "center"
-#| paged.print: true
-#| results: "hold"
-#| fig-width: 10
-#| fig-height: 5
-#| fig.cap: "Eventos hospitalarios y reportes de pertenencia a PPOO MINSAL, por conglomerados"
 
 ppoo_clus_pre_pam_om4_q<-
   df_filled2[,c("run","glosa_pueblo_originario")] |> 
@@ -2178,9 +2223,117 @@ janitor::fisher.test(ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg, simula
 #p-value = 0.00258
 
 cat("No vale la pena repetir el post-hoc, es muy similar todo (lo hice)")
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+cat("el primer evento ver qué reportaron a MINSAL en PPOO")
+
+ppoo_clus_pre_pam_om4_q_clasificaciones2<-
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")] |>
+  left_join(
+    df_filled2[, c("run", "glosa_pueblo_originario")], 
+    by = "run",
+    multiple ="first"
+  ) |>
+  mutate(glosa_pueblo_originario_rec = if_else(
+ glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO", glosa_pueblo_originario
+  )) |>
+  #filter(!run %in% neg_sil_width) |> 
+  group_by(run, clus_pam_om4) |>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om4, show_na = T)
+
+janitor::adorn_percentages(ppoo_clus_pre_pam_om4_q_clasificaciones2, "row") |> 
+  mutate_if(is.numeric, ~round(.*100, 1)) |> 
+  knitr::kable("markdown", caption="Otra forma de clasificación PPOO con reporte vs. conglomerados (por fila) (excluye ASW neg)")
+
+janitor::fisher.test(ppoo_clus_pre_pam_om4_q_clasificaciones2, simulate.p.value=T, B=1e5)
+#p-value = 0.01376
+
+chisq.posthoc.test(ppoo_clus_pre_pam_om4_q_clasificaciones2[,2:5],simulate.p.value=T, B=1e5)|> 
+  (\(df) { dplyr::mutate_at(df, 3:ncol(df), ~ round(as.numeric(gsub("\\*", "", .)), 3))
+  })()|>
+  group_by(Dimension)|>
+  (\(df) { summarise(df, across(2:(ncol(df)-1), ~ paste0(first(sprintf("%1.2f", .)), " (p=", last(sprintf("%1.3f", .)), ")")))
+  })()|>
+  (\(df) { dplyr::mutate_at(df, 2:length(names(df)), ~ gsub("p\\=0.000)", "p<0.001)", .))
+  })()|>
+  mutate(Dimension= ppoo_clus_pre_pam_om4_q_clasificaciones[,1]) |> 
+  mutate(Dimension= factor(Dimension, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche"))) |> 
+  arrange(Dimension) |>
+  mutate(Dimension= as.character(Dimension)) |> 
+  knitr::kable("markdown", caption = "Comparación post-hoc, conglomerado-PPOO autorreporte")
+
+  cat("Tampoco resulta significativo en https://adaptivedesignstrial.shinyapps.io/posthoc/\n")
+print("Eso si resulta interesante que los 25 usuarios desconcidos puro son 0.02 aunque en conjunto no hay bonferroni ni nada, pero son mas grandes; también es más grande Mapuche")
 
 #L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
 #L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+cat("Ahora descartando siluetas negativas, para el primer evento ver qué reportaron a MINSAL en PPOO")
+ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg2<-
+ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om4", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")] |>
+  left_join(
+    df_filled2[, c("run", "glosa_pueblo_originario")], 
+    by = "run",
+    multiple ="first"
+  ) |>
+  mutate(glosa_pueblo_originario_rec = if_else(
+ glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO", glosa_pueblo_originario
+  )) |>
+  filter(!run %in% neg_sil_width) |> 
+  group_by(run, clus_pam_om4) |>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om4, show_na = T)
+
+janitor::adorn_percentages(ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg2, "row") |> 
+  mutate_if(is.numeric, ~round(.*100, 1)) |> 
+  knitr::kable("markdown", caption="Otra forma de clasificación PPOO con reporte vs. conglomerados (por fila) (excluye ASW neg)")
+
+cat("Fisher test (menos los -ASWs), nueva clasificación (primer evento reportado)\n")
+janitor::fisher.test(ppoo_clus_pre_pam_om4_q_clasificaciones_sin_asw_neg2, simulate.p.value=T, B=1e5)
+#p-value = 0.00266
+
+cat("No vale la pena repetir el post-hoc, es muy similar todo (lo hice)")
+```
+
+
+```{r 11ppoo-plot-cluster-2}
+#| message: true
+#| include: true
+#| warning: false
+#| error: false
+#| eval: true
+#| fig.show: "hold"
+#| fig.align: "center"
+#| paged.print: true
+#| results: "hold"
+#| fig-width: 10
+#| fig-height: 5
+#| fig.cap: "Eventos hospitalarios y reportes de pertenencia a PPOO MINSAL, por conglomerados"
+
 cat("(__________________________________________________________________)\n")
 reshape2::melt(ppoo_clus_pre_pam_om4_q, id.vars = "glosa_pueblo_originario_rec") |> 
   dplyr::mutate(glosa_pueblo_originario_rec= 
@@ -2228,7 +2381,7 @@ ppoo_clus_pre_pam_om4_q_rapanui<-
   janitor::tabyl(glosa_pueblo_originario_rec, clus_pam_om4) |> 
   janitor::adorn_percentages("row")
 
-cat("\norigen\n")
+cat("\norigen, en caso que sospechemos de los patrones de hospitalización observados para RAPA NUI \n")
 df_filled2[,c("run","glosa_pueblo_originario")] |> 
     dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om4","factor_inclusivo_real_hist_mas_autperc", "codigo_region_rec_base")], by="run", multiple="first")|> 
     dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario=="NINGUNO" & factor_inclusivo_real_hist_mas_autperc!="00"~ "DESCONOCIDO", glosa_pueblo_originario=="NINGUNO"~"NINGUNO", glosa_pueblo_originario=="RAPA NUI (PASCUENSE)"~"RN", T~"RESTO")) |> 
@@ -4045,6 +4198,266 @@ plot_data_melt_pam_om4_q
 ggsave(filename= "_figs/asociaciones_pam_om4_q_25.png", plot_data_melt_pam_om4_q, width=11*.8, height=6*.8, dpi=600)
 
 ```
+
+### Comparación con base original PPOO
+
+Seleccionamos casos de 2018 en adelante para hacer una base comparable.
+
+```{r base-completa-2018-2022, eval=T}
+data_nueva<- rio::import("_data/EH_2010_2022_Pasantes_v2_encrip.csv")
+# 2) Opción: cargar tidytable DESPUÉS de dplyr para "sobreponer" sus verbs
+library(dplyr)
+library(stringr)
+library(janitor)
+library(tidytable)  # cargar después
+
+regex_otro <- "AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO|LICAN|QUECHUA|OTRO"
+
+tab_clas_por_run <- 
+  data_nueva|> 
+  filter(FECHA_INGRESO_FMT_DEIS >= as.Date("2018-01-01"), FECHA_INGRESO_FMT_DEIS < as.Date("2019-01-01"))|> 
+    replace_na(list(
+    CyA_Conadi = 0,
+    CI_Conadi  = 0,
+    RSH        = 0
+  ))|> 
+   mutate(
+    glosa_pueblo_originario_rec = case_when(
+      GLOSA_PUEBLO_ORIGINARIO == "NINGUNO" &
+        (CyA_Conadi == 1 | CI_Conadi == 1 | RSH == 1)~ "DESCONOCIDO",
+      T~ as.character(GLOSA_PUEBLO_ORIGINARIO)   # evita choque factor/chr
+    )
+  )|> 
+  summarise(
+    tiene_otro_po     = any(str_detect(glosa_pueblo_originario_rec, regex_otro)),
+    tiene_mapuche     = any(str_detect(glosa_pueblo_originario_rec, "MAPUCHE")),
+    tiene_ninguno     = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"), # si dejo al final, no recojo ningun "DESCONOCIDO"    
+    .by = RUN)#|>
+
+cat("Clasificación PPOO reportado en 2018\n")
+
+tab_clas_por_run|>                       # tu data frame
+  mutate(
+    clas_por_run = case_when(
+      # 1. priorizamos Mapuche
+      tiene_mapuche ~ "Mapuche",
+      # 2. luego otros pueblos originarios distintos de Mapuche
+      tiene_otro_po ~ "Otros reportados (no mapuche)",
+      # 3. si no hay Mapuche ni otros y se reporta “ninguno”
+      tiene_desconocido ~ "Desconocido",
+      # 4. si no hay Mapuche ni otros y se reporta “ninguno”
+      !tiene_mapuche & !tiene_otro_po & tiene_ninguno ~ "Ninguno puro",
+      # 4. cualquier otro caso ⇒ NA
+      TRUE ~ NA_character_
+    )
+  ) |> 
+  tabyl(clas_por_run, show_na = TRUE) |> 
+  mutate(percent= scales::percent(percent, accuracy=.1))
+#   clas_por_run                        n percent
+#   <chr>                           <int> <chr>  
+# 1 Desconocido                     90256 7.1%   
+# 2 Mapuche                         20555 1.6%   
+# 3 Ninguno puro                  1161822 91.0%  
+# 4 Otros reportados (no mapuche)    4170 0.3%   
+
+
+ppoo_inclusivo<- rio::import("filtered_df.csv.gz", skip=1)
+
+
+cat("Hacemos una clasificación comparable a la versión autorreportada de PPOO MINSAL pero para todos las hospitalizaciones del 2018")
+tab_clas_por_run2 <- 
+  data_nueva|> 
+  filter(FECHA_INGRESO_FMT_DEIS >= as.Date("2018-01-01"), FECHA_INGRESO_FMT_DEIS < as.Date("2019-01-01"))|> 
+    replace_na(list(
+    CyA_Conadi = 0,
+    CI_Conadi  = 0,
+    RSH        = 0
+  ))|> 
+   mutate(
+    glosa_pueblo_originario_rec = case_when(
+      GLOSA_PUEBLO_ORIGINARIO == "NINGUNO" &
+        RUN %in% ppoo_inclusivo[,2]~ "DESCONOCIDO",
+      T~ as.character(GLOSA_PUEBLO_ORIGINARIO)   # evita choque factor/chr
+    )
+  )|> 
+  summarise(
+    tiene_otro_po     = any(str_detect(glosa_pueblo_originario_rec, regex_otro)),
+    tiene_mapuche     = any(str_detect(glosa_pueblo_originario_rec, "MAPUCHE")),
+    tiene_ninguno     = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"), # si dejo al final, no recojo ningun "DESCONOCIDO"    
+    .by = RUN)#|>
+tab_clas_por_run2|>                       # tu data frame
+  mutate(
+    clas_por_run = case_when(
+      # 1. priorizamos Mapuche
+      tiene_mapuche ~ "Mapuche",
+      # 2. luego otros pueblos originarios distintos de Mapuche
+      tiene_otro_po ~ "Otros reportados (no mapuche)",
+      # 3. si no hay Mapuche ni otros y se reporta “ninguno”
+      tiene_desconocido ~ "Desconocido",
+      # 4. si no hay Mapuche ni otros y se reporta “ninguno”
+      !tiene_mapuche & !tiene_otro_po & tiene_ninguno ~ "Ninguno puro",
+      # 4. cualquier otro caso ⇒ NA
+      TRUE ~ NA_character_
+    )
+  ) |> 
+  tabyl(clas_por_run, show_na = TRUE)|> 
+  mutate(percent= scales::percent(percent, accuracy=.1))
+#   clas_por_run                        n percent
+#   <chr>                           <int> <chr>  
+# 1 Desconocido                    173068 13.6%  
+# 2 Mapuche                         20555 1.6%   
+# 3 Ninguno puro                  1079010 84.5%   
+# 4 Otros reportados (no mapuche)    4170 0.3%   
+
+#cluster SUD
+c(583, 135, 4, 20)
+#criterio inclusivo Desconocido,2018-2022
+c(4132056, 575626, 20852, 80216)
+#X-squared = 33.56, df = 3, p-value = 2.454e-07
+
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+
+
+cat("Traemos la base de datos con todos los clasificados como PPOO\n")
+filtered_df_csv <- readr::read_csv("filtered_df.csv", col_types = readr::cols(...1 = readr::col_skip()), skip=1)
+colnames(filtered_df_csv)<- c("run")
+nrow(filtered_df_csv)
+#[1] 1687190
+ci_cya_conadi<-readr::read_csv("cya_conadi_o_ci_conadi.csv")
+nrow(ci_cya_conadi)
+#[1] 1037607
+nrow(unique(ci_cya_conadi))
+#[1] 476338
+
+cat("Whatever PPOO identification")
+scales::percent(nrow(filtered_df_csv)/9646325, accuracy=.1)
+#[1] "17.5%"
+
+
+cat("Y si veo del 2018 en adelante con todas las hospitalizaciones en ese periodo\n")
+  data_nueva|> 
+  filter(FECHA_INGRESO_FMT_DEIS >= as.Date("2018-01-01"), FECHA_INGRESO_FMT_DEIS < as.Date("2019-01-01"))|> 
+          (\(df) {
+            nrow(distinct(df, RUN))->> filt_data_nueva
+            df
+            })() |> 
+    filter(RUN %in% pull(filtered_df_csv))|> 
+    distinct(RUN) |> 
+      (\(df) {
+      print(paste0("Sólo PPOO que tienen CUALQUIERA (RSH/MINSAL histórico O CONADIS): ",nrow(df)))
+      print(paste0("Sólo PPOO que tienen CUALQUIERA (RSH/MINSAL histórico O CONADIS) %: ",scales::percent(nrow(df)/filt_data_nueva, accuracy=.1)))
+  })()
+
+
+cat("Institutional recognition")
+scales::percent(nrow(unique(ci_cya_conadi))/nrow(distinct(data_nueva, RUN)), accuracy=.1)
+#[1] "4.9%"
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("Quienes tienen ambos (divide por el total de pacientes históricos)\n")
+filtered_df_csv |> 
+  tidytable::inner_join(ci_cya_conadi, by=c("run"="RUN"), multiple="first") |> 
+  nrow()
+#[1] 800271
+scales::percent(800271/9646325, accuracy=.1)
+
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("Y si veo del 2018 en adelante con todas las hospitalizaciones en ese periodo\n")
+  data_nueva|> 
+  filter(FECHA_INGRESO_FMT_DEIS >= as.Date("2018-01-01"), FECHA_INGRESO_FMT_DEIS < as.Date("2019-01-01"))|> 
+          (\(df) {
+            nrow(distinct(df, RUN))->> filt_data_nueva
+            df
+            })() |> 
+    filter(RUN %in% pull(tidytable::inner_join(filtered_df_csv, ci_cya_conadi, by=c("run"="RUN"), multiple="first"),run))|> 
+    distinct(RUN) |> 
+      (\(df) {
+      print(paste0("Sólo PPOO que tienen ambos (RSH/MINSAL histórico + CONADIS): ",nrow(df)))
+      print(paste0("Sólo PPOO que tienen ambos (RSH/MINSAL histórico + CONADIS) %: ",scales::percent(nrow(df)/filt_data_nueva, accuracy=.1)))
+  })()
+  # [1] "Sólo PPOO pero inclusivo (cualquiera): 46704"
+  # [1] "Sólo PPOO pero inclusivo (cualquiera) %: 3.7%"
+
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("Sólo CONADI\n")
+cbind.data.frame(filtered_df_csv, rn=1:length(ci_cya_conadi)) |> 
+  tidytable::right_join(ci_cya_conadi, by=c("run"="RUN"), multiple="first") |> 
+  filter(is.na(rn)) |> 
+  nrow()
+
+cbind.data.frame(ci_cya_conadi, rn_conadi=1:length(ci_cya_conadi$RUN))|> 
+  tidytable::left_join(cbind.data.frame(filtered_df_csv, rn=1:length(filtered_df_csv$run)), by=c("RUN"="run"), multiple="first") |> 
+  filter(is.na(rn)) |> 
+  nrow()
+#[1] 237336
+scales::percent(237336/9646325, accuracy=.1)
+
+cat("Y si veo del 2018 en adelante con todas las hospitalizaciones en ese periodo\n")
+  data_nueva|> 
+  filter(FECHA_INGRESO_FMT_DEIS >= as.Date("2018-01-01"), FECHA_INGRESO_FMT_DEIS < as.Date("2019-01-01"))|> 
+          (\(df) {
+            nrow(distinct(df, RUN))->> filt_data_nueva
+            df
+            })() |> 
+  filter(RUN %in% pull(
+    cbind.data.frame(ci_cya_conadi, rn_conadi=1:length(ci_cya_conadi$RUN))|> 
+  tidytable::left_join(cbind.data.frame(filtered_df_csv, rn=1:length(filtered_df_csv$run)), by=c("RUN"="run"), multiple="first") |> 
+  filter(is.na(rn)), RUN))|> 
+    distinct(RUN) |> 
+      (\(df) {
+      print(paste0("Sólo PPOO CONADI: ",nrow(df)))
+      print(paste0("Sólo PPOO CONADI %: ",scales::percent(nrow(df)/filt_data_nueva, accuracy=.1)))
+  })()
+  # [1] "Solo CONADI: 14945"
+  # [1] "Solo CONADI %: 1.2%"
+
+  #:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
+cat("Sólo RSH o autodentificación histórico\n")
+cbind.data.frame(filtered_df_csv, rn=1:length(filtered_df_csv$run)) |> 
+  tidytable::left_join(cbind.data.frame(ci_cya_conadi, rn_conadi=1:length(ci_cya_conadi$RUN)), by=c("run"="RUN"), multiple="first") |> 
+  filter(is.na(rn_conadi)) |> 
+  nrow()
+#[1] 1329383
+scales::percent(1329383/9646325, accuracy=.1)
+#13.8
+
+cat("Y si veo del 2018 en adelante con todas las hospitalizaciones en ese periodo\n")
+  data_nueva|>
+  filter(FECHA_INGRESO_FMT_DEIS >= as.Date("2018-01-01"), FECHA_INGRESO_FMT_DEIS < as.Date("2019-01-01"))|> 
+          (\(df) {
+            nrow(distinct(df, RUN))->> filt_data_nueva
+            df
+            })() |> 
+  filter(RUN %in% pull(
+      cbind.data.frame(filtered_df_csv, rn=1:length(filtered_df_csv$run)) |> 
+    tidytable::left_join(cbind.data.frame(ci_cya_conadi, rn_conadi=1:length(ci_cya_conadi$RUN)), by=c("run"="RUN"), multiple="first") |> 
+    filter(is.na(rn_conadi)), run)
+    ) |> 
+    distinct(RUN) |> 
+      (\(df) {
+      print(paste0("Sólo RSH o autoidentificación histórico: ",nrow(df)))
+      print(paste0("Sólo RSH o autoidentificación histórico %: ",scales::percent(nrow(df)/filt_data_nueva, accuracy=.1)))
+  })()
+# [1] "Sólo RSH o autoidentificación histórico: 151089"
+# [1] "Sólo RSH o autoidentificación histórico %: 11.8%"
+  
+  
+  
+invisible("19.9% of the patients were identified as belonging to an Indigenous Peoples group in any hospital record since 2005 or in the Social household register file (17.8%) or were officially recognized as such in the Registry of  Indigenous Status/Communities (8.5%).")  
+rm(data_nueva)
+rm(ci_cya_conadi)
+rm(filtered_df_csv)
+```
+
 
 <br> 
 

@@ -555,9 +555,11 @@ psych::describe(episodes_1_mnth_tus_c2$n, quant=c(.25,.75))
 #| eval: true
 #| paged.print: true
 
-janitor::chisq.test(df_filled2[,c("run","glosa_pueblo_originario")]|> 
+janitor::chisq.test(
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
         dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
-        janitor::tabyl(glosa_pueblo_originario, clus_pam_om2))
+        janitor::tabyl(glosa_pueblo_originario, clus_pam_om2)
+  )
 # X-squared = 19.966, df = 8, p-value = 0.01046
 
 ```
@@ -616,6 +618,21 @@ ppoo_clus_pre_pam_om2_m_act<-
 janitor::chisq.test((ppoo_clus_pre_pam_om2_m_act))
 #X-squared = 4.2837, df = 1, p-value = 0.03848 # ES SIGNIFICATIVO!, x2 OR de pertenecer a uno de estos pueblos en TUS; 1.5 veces la prevalencia
 
+ppoo_clus_pre_pam_om2_m_act_mapu<-
+  df_filled2[,c("run","glosa_pueblo_originario")]|> 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|> 
+  dplyr::mutate(glosa_pueblo_originario_rec= dplyr::case_when(glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO", T~glosa_pueblo_originario)) |> 
+  group_by(run, clus_pam_om2)|>
+  summarise(sum_ppoo= sum(grepl("MAPU", glosa_pueblo_originario_rec)), .groups="drop")|>
+  ungroup()|> 
+  mutate(sum_bin_ppo= ifelse(sum_ppoo>0, 1, 0))|>
+  janitor::tabyl(sum_bin_ppo, clus_pam_om2)
+janitor::chisq.test(ppoo_clus_pre_pam_om2_m_act_mapu)
+
+cat("3.8% clasificados por TUS se identificaron como Mapuches, vs. 2.8% en TSM p=0.05")
+
+
 cat("Sólo RAPA NUI (ver por RUN, al menos una observación que se identifique RAPA NUI)\n") #NO SIGNIFICATIVO
 ppoo_clus_pre_pam_om2_m_rapa<-
   df_filled2[,c("run","glosa_pueblo_originario")]|> 
@@ -659,7 +676,7 @@ df_filled2[, c("run", "glosa_pueblo_originario")]|>
   )) |>
   janitor::tabyl(clas_por_run, clus_pam_om2, show_na = T)
 
-janitor::adorn_percentages(ppoo_clus_pre_pam_om4_q_clasificaciones, "col")|> 
+janitor::adorn_percentages(ppoo_clus_pre_pam_om2_m_clasificaciones, "col")|> 
     mutate_if(is.numeric, ~round(.*100, 1)) |> mutate(clas_por_run= factor(clas_por_run, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche")))|> 
   arrange(clas_por_run)|>
   (\(df) {
@@ -697,6 +714,68 @@ invisible("0.04 tiene los pvalues basados en residuos ajustados y pvalues basado
 invisible("0.05 tiene los pvalues basados en residuos ajustados y pvalues basados en la aproximación exacta , en el que Desconocido puro tienen más proporción TUS")
 
 invisible("Los desconocido puro son quienes tienen i_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1, es decir, históricamente son reconocidos o se han autoidentificado, pero no en MINSAL (que es el que registra la mierdita)")
+
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+cat("el primer evento ver qué reportaron a MINSAL en PPOO")
+
+ppoo_clus_pre_pam_om2_m_clasificaciones2<-
+df_filled2[, c("run", "glosa_pueblo_originario")]|>
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run", "clus_pam_om2")], by="run", multiple="first")|> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|>
+  mutate(glosa_pueblo_originario_rec = if_else(
+ glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1), "DESCONOCIDO", glosa_pueblo_originario
+  )) |>
+  #filter(!run %in% neg_sil_width) |> 
+  group_by(run, clus_pam_om2) |>
+  summarise(
+    tiene_otro_po = any(grepl("AYMARA|COLLA|DIAGUITA|KAWÉSQAR|RAPA NUI|YAGÁN|OTRO", glosa_pueblo_originario_rec)),
+    tiene_mapuche = any(grepl("MAPUCHE", glosa_pueblo_originario_rec)),
+    tiene_ninguno = any(glosa_pueblo_originario_rec == "NINGUNO"),
+    tiene_desconocido = any(glosa_pueblo_originario_rec == "DESCONOCIDO"),
+    .groups = "drop"
+  ) |>
+  mutate(clas_por_run = case_when(
+    tiene_mapuche ~ "Mapuche",
+    !tiene_mapuche & tiene_otro_po ~ "Otros reportados (no mapuche)",
+    tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Ninguno puro",
+    tiene_desconocido & !tiene_ninguno & !tiene_otro_po & !tiene_mapuche ~ "Desconocido puro", T~NA_character_
+  )) |>
+  janitor::tabyl(clas_por_run, clus_pam_om2, show_na = T)
+
+ppoo_clus_pre_pam_om2_m_clasificaciones2|>
+  (\(df) {
+  if (interactive()) {janitor::adorn_percentages(df, "col") |> mutate_if(is.numeric, ~round(.*100, 1)) |> mutate(across(-clas_por_run, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+  knitr::kable(df, "markdown", caption="Otra forma de clasificación PPOO con reporte vs. conglomerados (por fila)")
+  })()
+
+janitor::fisher.test(ppoo_clus_pre_pam_om2_m_clasificaciones2, simulate.p.value=T, B=1e5)
+# data:  ppoo_clus_pre_pam_om2_m_clasificaciones2
+# p-value = 0.00101
+# alternative hypothesis: two.sided
+
+chisq.posthoc.test(ppoo_clus_pre_pam_om2_m_clasificaciones2[,2:3],simulate.p.value=T, B=1e5)|> 
+  (\(df) { dplyr::mutate_at(df, 3:ncol(df), ~ round(as.numeric(gsub("\\*", "", .)), 3))
+  })()|>
+  group_by(Dimension)|>
+  (\(df) { summarise(df, across(2:(ncol(df)-1), ~ paste0(first(sprintf("%1.2f", .)), " (p=", last(sprintf("%1.3f", .)), ")")))
+  })()|>
+  (\(df) { dplyr::mutate_at(df, 2:length(names(df)), ~ gsub("p\\=0.000)", "p<0.001)", .))
+  })()|>
+  mutate(Dimension= ppoo_clus_pre_pam_om2_m_clasificaciones2[,1]) |> 
+  mutate(Dimension= factor(Dimension, levels= c("Ninguno puro", "Desconocido puro", "Otros reportados (no mapuche)", "Mapuche"))) |> 
+  arrange(Dimension) |>
+  mutate(Dimension= as.character(Dimension)) |> 
+  knitr::kable("markdown", caption = "Comparación post-hoc, conglomerado-PPOO autorreporte")
+
+invisible("Otros reportados (no mapuche) |2.68 (p=0.059)")
+
+cat("Tampoco resulta significativo en https://adaptivedesignstrial.shinyapps.io/posthoc/\n")
+cat("Me aparece que mapuche es 0.04 en todos los tipos de clasificación, pero en general la asociación no es significativa se´gun Holm o Bonferroni")  
+print("Eso si resulta interesante que los 25 usuarios desconcidos puro son 0.02 aunque en conjunto no hay bonferroni ni nada, pero son mas grandes; también es más grande Mapuche")
+
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
+#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L#L
 
 #####::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #####::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -913,6 +992,46 @@ janitor::fisher.test(ppoo_clus_pre_pam_om2_m_clasificaciones_sin_asw_neg, simula
 invisible("The Bonferroni corrected significant level for Exact approach is: 0.05/(R*C)=0.00625")
 invisible("Para Otros reportados (no mapuche) p-value 0.01 en basado en residuo estandarizado, ajustado, y en la aproximación exacta, menor en TUS")
 invisible("Para Mapuche p-value 0.03-0.05 en basado en aproximación exacta, residuo ajustado y estandarizado, respectivamente, de que es más alto proporción en TUS")
+
+
+
+
+
+cat("Sólo viendo clasificación por autorreporte pertenencia pueblo Mapuche primer a hospitalización")
+glosa_pueblo_originario_month_rec2 <- 
+  ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[, c("run", "clus_pam_om2")] |> 
+  dplyr::left_join(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens[,c("run", "ci_cya_conadi", "ppoo_minsal_y_rsh_2010")], by="run", multiple="first")|>
+  left_join(
+    df_filled2[, c("run", "glosa_pueblo_originario")],
+    by = "run",
+    multiple = "first"
+  ) |> 
+  mutate(
+    glosa_pueblo_originario_rec = case_when(
+      glosa_pueblo_originario == "NINGUNO" & (ci_cya_conadi ==1 | ppoo_minsal_y_rsh_2010==1)~ "DESCONOCIDO",
+      glosa_pueblo_originario == "NINGUNO" ~ "NINGUNO",
+      grepl("MAPU", glosa_pueblo_originario) ~ "MAPUCHE",
+      TRUE ~ "RESTO"
+    ),
+    pueblo_bin = case_when(
+      glosa_pueblo_originario_rec == "MAPUCHE" ~ "Mapuche",
+      glosa_pueblo_originario_rec %in% c("DESCONOCIDO", "NINGUNO", "RESTO") ~ "Otro o ninguno"
+    )
+  ) |> 
+  group_by(run) |> 
+  summarise(
+    sum_ppoo = sum(grepl("Mapuche", pueblo_bin)),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    sum_bin_ppo = ifelse(sum_ppoo > 0, 1, 0)
+  ) |> 
+  pull(sum_bin_ppo)
+
+table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,glosa_pueblo_originario_month_rec2)
+
+chisq_cramerv(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,glosa_pueblo_originario_month_rec2))
+
 #:#:#:#:#:#:#:#:#:#:#:#:#:#:
 #:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
 #:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
@@ -1282,13 +1401,41 @@ Observamos que aquellos en el conglomerado que se encuentra ingresada por trasto
 #| paged.print: true
 #| results: "hold"
 
+
+cat("Traemos la base de datos con todos los clasificados como PPOO\n")
+filtered_df_csv <- readr::read_csv("filtered_df.csv", col_types = readr::cols(...1 = readr::col_skip()))
+colnames(filtered_df_csv)<- c("rn", "run")
+nrow(filtered_df_csv)
+#[1] 1687190
+invisible("Quienes tienen un registro RSH o en el histórico una autoidentificación por MINSAL")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$ppoo_minsal_y_rsh_2010 <- 
+ifelse(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run %in%  filtered_df_csv$run,1,0)
+
+ci_cya_conadi<-readr::read_csv("cya_conadi_o_ci_conadi.csv")
+
+invisible("SI tiene un registro CONADI CyA o CI, entonces es 1")
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$ci_cya_conadi <- 
+ifelse(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$run %in%  ci_cya_conadi$RUN,1,0)
+
+rm(ci_cya_conadi)
+rm(filtered_df_csv)
+
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$fac_incl_real_hist_autoperc25<-
+  with(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, paste0(ci_cya_conadi, ppoo_minsal_y_rsh_2010))
+
+
 ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
-  dplyr::count(clus_pam_om2, factor_inclusivo_real_hist_mas_autperc)|>
+  dplyr::count(clus_pam_om2, fac_incl_real_hist_autoperc25)|>
   dplyr::group_by(clus_pam_om2)|>
   dplyr::mutate(n_prop = paste0(n, " (",scales::percent(n / sum(n), accuracy=.1),")"))|>
   dplyr::select(-n)|>
-  tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc, values_from = n_prop, values_fill = "0")|> 
-  knitr::kable("markdown", col.names=c("Conglomerados","No se identifica/no pertenece", "No se identifica/hay reconocimiento", "Se identifica/hay reconocimeinto"), caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO") # leve mayor identificación y reconocimiento en TUS
+  dplyr::mutate(fac_incl_real_hist_autoperc25 = factor(fac_incl_real_hist_autoperc25, levels = c("11", "10", "01", "00"), labels= c("Hay reconocimeinto/se identifica", "Hay reconocimiento/no se identifica", "No hay reconocimiento/se identifica", "No hay reconocimiento/no se identifica")))|> 
+  dplyr::arrange(fac_incl_real_hist_autoperc25)|>
+  tidyr::pivot_wider(names_from = clus_pam_om2,  values_from = n_prop, values_fill = "0")|> 
+  (\(df) {
+  if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+  knitr::kable(df, caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO")
+  })()
 ```
 
 Vemos las categorías de clasificación de PPOO según autopercepción (en MINSAL y en RSH) y reconocimiento CONADI.
@@ -1302,23 +1449,26 @@ Vemos las categorías de clasificación de PPOO según autopercepción (en MINSA
 #| paged.print: true
 #| results: "hold"
 
-chisq_cramerv(table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2))
+
+chisq_cramerv(
+  with(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, table(clus_pam_om2, fac_incl_real_hist_autoperc25))
+  )
 # $chisq_statistic
-# [1] "3.83"
+# [1] "4.22"
 # 
 # $chisq_df
 # df 
-#  2 
+#  3 
 # 
 # $chisq_p_value
-# [1] "0.1471"
+# [1] "0.2392"
 # 
 # $cramers_v
-# [1] "0.02"
+# [1] "0.03"
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
-with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m) , table(factor_inclusivo_real_hist_mas_autperc, clus_pam_om2))
+with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m) , table(fac_incl_real_hist_autoperc25, clus_pam_om2))
 )
 #[1] "0.1532"
 ```
@@ -1336,7 +1486,7 @@ Ahora lo hacemos con la versión binarizada
 #| eval: true
 #| paged.print: true
 #| results: "hold"
-ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc_bin<- ifelse(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc=="00",0,1)
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$factor_inclusivo_real_hist_mas_autperc_bin<- ifelse(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$fac_incl_real_hist_autoperc25=="00",0,1)
 
 ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
     dplyr::count(clus_pam_om2, factor_inclusivo_real_hist_mas_autperc_bin)|>
@@ -1346,10 +1496,10 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
     tidyr::pivot_wider(names_from = factor_inclusivo_real_hist_mas_autperc_bin, values_from = n_prop, values_fill = "0")|>  #rio::export("clipboard")
   knitr::kable("markdown", caption="Porcentajes por fila, conglomerado vs. Pertenencia/identificación + Reconocimento CONADI PPOO / Binario")
 
-ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|> 
-    dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1))|> 
-    janitor::tabyl(factor_inclusivo_real_hist_mas_autperc_bin,clus_pam_om2)|>
-    janitor::chisq.test()
+chisq_cramerv(
+  with(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, table(factor_inclusivo_real_hist_mas_autperc_bin, clus_pam_om2))
+)# [1] "0.0938"
+
 #X-squared = 2.9179, df = 1, p-value = 0.0876
 #
 #
@@ -1376,16 +1526,19 @@ Tampoco se observa asociación alguna. Hicimos una prueba post-hoc usando Bonfer
 # 
 invisible("No hay nada, el tiempo promedio de censura es similar")
 
-ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|> 
-  dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1))|> 
-  janitor::tabyl(clus_pam_om2,death_time_rec)|> 
-  dplyr::mutate(`1`= paste0(`1`," (", scales::percent(`1`/(`0`+`1`), accuracy=.1),")"))|> 
-  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|> 
-  dplyr::group_by(clus_pam_om2)|> 
+ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens |> 
+  dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)) |> 
+  janitor::tabyl(clus_pam_om2,death_time_rec) |> 
+  dplyr::mutate(`1`= paste0(`1`," (", scales::percent(`1`/(`0`+`1`), accuracy=.1),")")) |> 
+  dplyr::left_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens |> 
+  dplyr::group_by(clus_pam_om2) |> 
   dplyr::summarise(mean=sprintf("%1.1f",mean(cens_time)),
   median=sprintf("%1.1f",quantile(cens_time, .5)), p25=sprintf("%1.1f",quantile(cens_time, .25)), p75=sprintf("%1.1f",quantile(cens_time, .75))), by="clus_pam_om2")|> 
   dplyr::select(-`0`)|> 
-  knitr::kable("markdown", col.names=c("Conglomerado","Mortalidad observada", "Promedio", "Mediana", "Q1", "Q3"), caption="Post-hoc, conglomerado vs. Mortalidad y tiempo a censura")
+  (\(df) {
+        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|> t()|>  rio::export("clipboard")}
+        knitr::kable(df, "markdown", col.names=c("Conglomerado","Mortalidad observada", "Promedio", "Mediana", "Q1", "Q3"), caption="Post-hoc, conglomerado vs. Mortalidad y tiempo a censura")
+      })()
 ```
 
 
@@ -1467,6 +1620,11 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
 #   2.079773 
 #p-value = 0.006252
 
+chisq_cramerv(
+with(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|> 
+             dplyr::mutate(death_time_rec=ifelse(death_time==60,0,1)), table(death_time_rec , clus_pam_om2))
+)
+
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
 with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_pam_om_clus2_m)|> 
@@ -1499,6 +1657,7 @@ labels_pam_om2_m <- c(
 )
 
 ```
+
 
 Se constata una asociación muy modesta entre la pertenencia a un conglomerado y mortalidad, siendo 6025, Un trimestre, TUS(1)	mayores sus chances de mortalidad.
 
@@ -1538,15 +1697,18 @@ with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_
 # [1] "<0.001"
 
 table(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$clus_pam_om2,ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens$codigo_region_rec_base)|> 
-    data.frame() |>  
-    dplyr::group_by(Var1) |> 
-    dplyr::mutate(perc= scales::percent(Freq/sum(Freq), accuracy=.1)) |> 
-    dplyr::ungroup() |> 
-    dplyr::mutate(Freq= Freq)  |>
-    dplyr::mutate(fp= paste0(Freq, " (", perc,")" )) |> 
-    dplyr::select(-Freq, -perc) |> 
-    tidyr::pivot_wider(names_from="Var2",values_from="fp")  |> 
-  knitr::kable("markdown", caption="Frecuencias absolutas y relativas por fila", col.names= c("Conglomerados", "Fuera de RM", "En RM"))
+    data.frame()|>
+    dplyr::group_by(Var1)|>
+    dplyr::mutate(perc= scales::percent(Freq/sum(Freq), accuracy=.1))|>
+    dplyr::ungroup()|> 
+    dplyr::mutate(Freq= Freq)|>
+    dplyr::mutate(fp= paste0(Freq, " (", perc,")" ))|>
+    dplyr::select(-Freq, -perc)|> 
+    tidyr::pivot_wider(names_from="Var2",values_from="fp")|> 
+  (\(df) {
+        if (interactive()) {mutate(df, across(-1, ~ gsub("%", "", gsub("\\.", ",", .))))|>  dplyr::select(c(1,3)) |> t()|>  rio::export("clipboard")}
+        knitr::kable(df, "markdown", caption="Frecuencias absolutas y relativas por fila", col.names= c("Conglomerados", "Fuera de RM", "En RM"))
+      })()
 ```
 
 
@@ -1623,7 +1785,7 @@ ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens|>
 
 chisq_cramerv(tab_clus_reg_pam_om2_m[,-1])
 # $chisq_statistic
-# [1] "184.78"
+# [1] "208.18"
 # 
 # $chisq_df
 # df 
@@ -1633,7 +1795,7 @@ chisq_cramerv(tab_clus_reg_pam_om2_m[,-1])
 # [1] "<0.001"
 # 
 # $cramers_v
-# [1] "0.17"
+# [1] "0.18"
 
 janitor::fisher.test(tab_clus_reg_pam_om2_m, simulate.p.value=T, B=1e5)
 #p-value = 1e-05
@@ -1644,7 +1806,18 @@ with(slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_
        dplyr::mutate(estab_homo_base= as.numeric(estab_homo_base))|>
     dplyr::inner_join(data_long_establecimiento_2024_std[,c("ESTAB_HOMO", "codigo_region", "nivel_de_atencion", "nivel_de_complejidad")], by = c("estab_homo_base" = "ESTAB_HOMO"), multiple = "first") , table(codigo_region , clus_pam_om2))
 )#[1] "<0.001"
-
+# $chisq_statistic
+# [1] "210.80"
+# 
+# $chisq_df
+# df 
+# 15 
+# 
+# $chisq_p_value
+# [1] "<0.001"
+# 
+# $cramers_v
+# [1] "0.18"
 ```
 
 Se encuentra una asociación significativa aunque débil entre región y conglomerados.
@@ -1677,17 +1850,17 @@ dplyr::mutate(macrozona = dplyr::case_when(
 
 chisq_cramerv(dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[,-1])
 # $chisq_statistic
-# [1] "100.16"
+# [1] "78.50"
 # 
 # $chisq_df
 # df 
-#  5 
+#  4 
 # 
 # $chisq_p_value
 # [1] "<0.001"
 # 
 # $cramers_v
-# [1] "0.13"
+# [1] "0.15"
 
 cat("Descartando valores negativos en sil width")
 chisq_cramerv(
@@ -1707,11 +1880,17 @@ dplyr::mutate(macrozona = dplyr::case_when(
 
 
 cat("Descriptivos")
-dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")|>
-  janitor::adorn_percentages("col")|>
-  janitor::adorn_rounding(digits = 3)|>
-  dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.1f%%)", dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[[cur_column()]], . * 100))) |> 
-  knitr::kable(caption="Porcentajes por columna, conglomerado vs. macrozona")
+dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")|> 
+  janitor::adorn_percentages("col")|> 
+  janitor::adorn_rounding(digits = 3)|> 
+    dplyr::mutate(across(-macrozona, ~ sprintf("%d (%.1f%%)", 
+  dplyr::filter(tab_clus_macrozona_pam_om2_m,macrozona!="RM")[[cur_column()]], . * 100)))|>
+  mutate(macrozona = factor(macrozona, levels = c("Macrozona Norte", "Macrozona Centro", "Macrozona Centro Sur", "Macrozona Sur", "Macrozona Austral")))|> 
+  arrange(macrozona)|>
+  (\(df) {
+  if (interactive()) {mutate(df, across(-macrozona, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+  knitr::kable(df, caption="Porcentajes por columna, conglomerado vs. macrozona")
+  })()
 ```
 
 
@@ -1818,21 +1997,18 @@ tab_clus_sexo_pam_om2_m|>
 dt_ing_calendar_month_t_desde_primera_adm_dedup|>
     dplyr::filter(month == 0)|>
     dplyr::inner_join(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens[,c("run","clus_pam_om2")], by="run")|>
-    dplyr::group_by(clus_pam_om2)|>
+    dplyr::group_by(clus_pam_om2) |>
     dplyr::summarise(mean_edad = mean(min_edad_anos),
                      sd= sd(min_edad_anos),
                      p50= quantile(min_edad_anos,.5),
-                     ci_lower = quantile(min_edad_anos, 0.25),
-                     ci_upper = quantile(min_edad_anos, 0.75)) |> 
-    dplyr::mutate(
-    edad_ingreso = sprintf(
-      "%.2f (%.2f ± %.2f); %.0f [%.0f, %.0f]",
-      mean_edad, mean_edad, sd, p50, ci_lower, ci_upper
-    )
-  )|>
-  dplyr::select(clus_pam_om2, edad_ingreso) |> 
-    #dplyr::mutate_at(2:ncol(.),~scales::percent(.))|> 
-    knitr::kable(caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2, col.names=c("Conglomerado", "Promedio Desv. Estándar Mediana p025 p975"))
+                     p25 = quantile(min_edad_anos, 0.25),
+                     p75 = quantile(min_edad_anos, 0.75)) |>
+    dplyr::mutate(sum= paste0(sprintf("%1.2f",mean_edad), " ± ", sprintf("%1.2f",sd), " ; ",p50," [",p25,", ",p75,"]"))|> 
+    dplyr::select(clus_pam_om2, sum)|>
+   (\(df) {
+     if (interactive()) {mutate(df, across(-clus_pam_om2, ~gsub("\\.", ",", .)))|> rio::export("clipboard")}
+     knitr::kable(df, caption="Descriptivos, edad minima de ingreso por conglomerado", digits=2)
+  })()
 ```
 
 
@@ -1984,6 +2160,19 @@ tab_clus_prev_pam_om2_m|>
   dplyr::mutate(across(-prev_benef_rec_post, ~sprintf("%d (%.1f%%)", tab_clus_prev_pam_om2_m[[cur_column()]],.*100)))|>
   #dplyr::mutate_at(2:ncol(.),~scales::percent(.))|> 
   knitr::kable(caption="Porcentajes por columna, conglomerado vs. Beneficios")
+
+
+tab_clus_prev_pam_om2_m|> 
+  janitor::adorn_percentages("col") |> 
+  janitor::adorn_rounding(digits = 3) |> 
+  dplyr::mutate(across(-prev_benef_rec_post, ~sprintf("%d (%.1f%%)", tab_clus_prev_pam_om2_m[[cur_column()]],.*100))) |> 
+  #dplyr::mutate_at(2:ncol(.),~scales::percent(.)) |> 
+  mutate(prev_benef_rec_post = factor(prev_benef_rec_post, levels = c("ISAPRE", "FONASA D", "FONASA BC", "FONASA A", "FFAA")))|> 
+  arrange(prev_benef_rec_post)|>
+  (\(df) {
+  if (interactive()) {mutate(df, across(-prev_benef_rec_post, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+  knitr::kable(df, caption="Porcentajes por columna, conglomerado vs. Previsión")
+  })()
 ```
 
 ##### 2.1.3.i. Comparación covariables- Niv. Complejidad
@@ -2024,12 +2213,17 @@ slice(ing_dt_ing_calendar_month_t_desde_primera_adm_dedup_wide2_cens, -sil_neg_p
 # X-squared = 46.192, df = 4, p-value = 2.247e-09
 # p-value = 1e-05
 
+
 tab_clus_compl_pam_om2_m|> 
   janitor::adorn_percentages("col")|> 
   janitor::adorn_rounding(digits = 3)|> 
-  dplyr::mutate(across(-nivel_de_complejidad, ~sprintf("%d (%.1f%%)", tab_clus_compl_pam_om2_m[[cur_column()]],.*100)))|>
-  #dplyr::mutate_at(2:ncol(.), ~scales::percent(as.numeric(.), accuracy=.1))|> 
-  knitr::kable(caption="Tabla de contingencia, Niv. de complejidad (proporción por columna)")
+   dplyr::mutate(across(-nivel_de_complejidad, ~sprintf("%d (%.1f%%)", tab_clus_compl_pam_om2_m[[cur_column()]],.*100)))|> 
+  mutate(nivel_de_complejidad = factor(nivel_de_complejidad, levels = c("Alta Complejidad", "Mediana Complejidad", "Baja Complejidad", "Pendiente", "Sin dato")))|> 
+  arrange(nivel_de_complejidad)|>
+  (\(df) {
+  if (interactive()) {mutate(df, across(-nivel_de_complejidad, ~ gsub("%", "", gsub("\\.", ",", .))))|> rio::export("clipboard")}
+  knitr::kable(df, caption="Tabla de contingencia, Niv. de complejidad (proporción por columna)")
+  })()
 ```
 
 

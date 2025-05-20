@@ -176,32 +176,32 @@ ggsave("_figs/sil_plot_pam_om6_q_25.png", width = 8, height = 5, dpi = 500)
 #| paged.print: true
 #| label: pamom6vspamom4
 
-tabla_conteo <- table(pamRange_quarter_om$clustering$cluster6, 
+tabla_conteo15 <- table(pamRange_quarter_om$clustering$cluster6, 
                       pamRange_quarter_om$clustering$cluster4)
 
 # Proporción por fila
-tabla_prop_fila <- prop.table(tabla_conteo, 1)
+tabla_prop_fila15 <- prop.table(tabla_conteo15, 1)
 
 # Proporción por columna
-tabla_prop_col <- prop.table(tabla_conteo, 2)
+tabla_prop_col15 <- prop.table(tabla_conteo15, 2)
 
 # Redondear ambas
-tabla_prop_fila <- sprintf("%1.1f", tabla_prop_fila*100)
-tabla_prop_col <- sprintf("%1.1f", tabla_prop_col*100)
+tabla_prop_fila15 <- sprintf("%1.1f", tabla_prop_fila15*100)
+tabla_prop_col15 <- sprintf("%1.1f", tabla_prop_col15*100)
 
 # Combinar ambas proporciones en el formato "fila / col"
-tabla_combinada <- matrix(
-  paste0(tabla_prop_fila, " / ", tabla_prop_col),
-  nrow = nrow(tabla_conteo),
-  ncol = ncol(tabla_conteo),
-  dimnames = dimnames(tabla_conteo)
+tabla_combinada15 <- matrix(
+  paste0(tabla_prop_fila15, " / ", tabla_prop_col15),
+  nrow = nrow(tabla_conteo15),
+  ncol = ncol(tabla_conteo15),
+  dimnames = dimnames(tabla_conteo15)
 )
 
 
 # Convertir la tabla a un formato limpio con kable
-tabla_combinada |> 
+tabla_combinada15 |> 
   data.frame() |> 
-  select(`X6623`, `X6612`, `X6522`, `X6574`) |> 
+  dplyr::select(`X6623`, `X6612`, `X6522`, `X6574`) |> 
   kable(
     caption = "Porcentajes de Clusters (por fila / por columna), Solución de 6 vs. 4 conglomerados", 
     col.names = c("6623, Un trimestre, TSM(4)", 
@@ -1032,7 +1032,7 @@ df_filled2 |>
   (\(df) {
  rownames(df) <- c("Total", "Q1, TSM", "Q1, TUS", "1Sem, TSM", "Q1, comorb", "Q1 TSM, 1yr TSM", "Q1 TSM, 1yr Otro"); df
       })() |> 
-  select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+  dplyr::select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
       (\(df) {
   if (interactive()) {df|> rio::export("clipboard")}
   knitr::kable(df, "markdown", caption="Días de hospitalización por cluster", digits=2)
@@ -1051,7 +1051,7 @@ psych::describe(episodes_tsm_1yr_otr_c6$n, quant=c(.25,.75))
   (\(df) {
  rownames(df) <- c("Total", "Q1, TSM", "Q1, TUS", "1Sem, TSM", "Q1, comorb", "Q1 TSM, 1yr TSM", "Q1 TSM, 1yr Otro"); df
       })() |> 
-  select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
+  dplyr::select(-any_of(c("trimmed", "mad", "range", "skew", "kurtosis","se"))) |> 
     (\(df) {
   if (interactive()) {df|> rio::export("clipboard")}
   knitr::kable(df, "markdown", caption="Número de episodios por cluster", digits=2)
@@ -1688,8 +1688,7 @@ ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens |>
       })()
 ```
 
-<div class="scrollable-content">
-```{r 12m-comp-cov-mortalidad2}
+```{r 12m-comp-cov-mortalidad1}
 #| message: true
 #| include: true
 #| warning: false
@@ -1766,7 +1765,11 @@ chisq.posthoc.test(with(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wi
   mutate(across(3: dplyr::last_col(),~sprintf("%1.3f",as.numeric(.))))|> 
   t() |> 
   knitr::kable("markdown", digits=3)
+```
 
+
+<div class="scrollable-content">
+```{r 12m-comp-cov-mortalidad125}
 # Realizar el análisis y crear la tabla directamente
 pairwise.prop.test(t(tab_cl_mortalidad_pam_om6_q[,2:ncol(tab_cl_mortalidad_pam_om6_q)]), p.adjust.method = "holm")$p.value |>
   as.table() |>
@@ -2528,8 +2531,8 @@ tab_clus_prev_pam_om6_q|>
   })()
 ```
 
-<div class="scrollable-content">
-```{r 12v-prevision-b}
+
+```{r 12v-prevision-b1}
 #| message: true
 #| include: true
 #| warning: false
@@ -2573,12 +2576,10 @@ chisq_cramerv(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_
 cat("Fisher test para valores ASW negativos")
 fisher.test(with(subset(ing_dt_ing_calendar_quarter_t_desde_primera_adm_dedup_wide2_cens, !rn %in% sil_neg_pam_om_clus6_q), table(prev_benef_rec_post, clus_pam_om6)), simulate=T, B=1e5)
 #p-value = 0.01204
+```
 
-
-#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
-#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
-#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:#:
-
+<div class="scrollable-content">
+```{r 12v-prevision-b2}
 chisq.posthoc.test(tab_clus_prev_pam_om6_q[,-1])|>
   (\(df) dplyr::mutate(df, across(3:ncol(df), ~round(as.numeric(gsub("\\*","",.x)),3))))()|>
   # knitr::kable("html", caption="Comparación post-hoc, conglomerado-región") |>
@@ -2598,9 +2599,6 @@ pairwise_chisq_gof_test(tab_clus_prev_pam_om6_q[-1], p.adjust.method="holm")|>
 ```
 </div>
 
-La asociación es lvemente significativa y muy débil. Si no se incluyen los valores con ASW negativos, la asociación no es significativa.
-
-La revisión de los resultados post-hoc permite observar que 6035, Un trimestre, TSM(6) presenta un mayor porcentaje de pacientes en este conglomerado en una previsión de FFAA. Con todo, esta asociación no es consistente en las distintas pruebas.
 
 
 ##### 1.2.3.i. Comparación covariables- Niv. Complejidad
